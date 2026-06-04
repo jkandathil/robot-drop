@@ -9,23 +9,24 @@ def main():
     # We use index 2 now because the camera reconnected!
     camera_index = 2
     
-    cap = cv2.VideoCapture(camera_index)
-    
-    if not cap.isOpened():
-        print(f"Error: Cannot open camera at index {camera_index}. Try changing the index to 0 or 2.")
-        return
+    cap = cv2.VideoCapture(camera_index, cv2.CAP_DSHOW)
     
     while True:
-        # Capture frame-by-frame
-        ret, frame = cap.read()
-        
-        if not ret:
-            print("Can't receive frame. Exiting ...")
-            break
+        if not cap.isOpened():
+            cap.release()
+            cap = cv2.VideoCapture(camera_index, cv2.CAP_DSHOW)
             
-        # Display the resulting frame in a window
-        cv2.imshow(f'Andrew Robot Camera (Index {camera_index})', frame)
-        
+        if cap.isOpened():
+            # Capture frame-by-frame
+            ret, frame = cap.read()
+            
+            if not ret:
+                cap.release()
+                continue
+                
+            # Display the resulting frame in a window
+            cv2.imshow(f'Andrew Robot Camera (Index {camera_index})', frame)
+            
         # Press 'q' to quit
         if cv2.waitKey(1) == ord('q'):
             break
