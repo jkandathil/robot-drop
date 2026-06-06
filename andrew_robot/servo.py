@@ -1,3 +1,4 @@
+import time
 from dynamixel_sdk import PortHandler, Protocol1PacketHandler, Protocol2PacketHandler, COMM_SUCCESS
 from .servo_defs import identify_servo
 
@@ -24,36 +25,51 @@ class Servo:
     def bytelist_to_int(self, data: list[int]) -> int:
         return sum([data[i] << (8 * i) for i in range(len(data))])
 
-    def write_bytes(self, address: int, length: int, data: int):
+    def write_bytes(self, address: int, length: int, data: int, retries=4):
         if address < 0:
             raise ValueError("Unsupported write address")
-        dxl_comm_result, dxl_error = self.packet_handler.writeTxRx(
-            self.port_handler,
-            self.id,
-            address,
-            length,
-            self.int_to_bytelist(data, length))
+        for attempt in range(retries):
+            dxl_comm_result, dxl_error = self.packet_handler.writeTxRx(
+                self.port_handler,
+                self.id,
+                address,
+                length,
+                self.int_to_bytelist(data, length))
+            if dxl_comm_result == COMM_SUCCESS:
+                self.raise_errors(dxl_comm_result, dxl_error)
+                return
+            time.sleep(0.01)
         self.raise_errors(dxl_comm_result, dxl_error)
 
-    def stage_write(self, address: int, length: int, data: int):
+    def stage_write(self, address: int, length: int, data: int, retries=4):
         if address < 0:
             raise ValueError("Unsupported write address")
-        dxl_comm_result, dxl_error = self.packet_handler.regWriteTxRx(
-            self.port_handler,
-            self.id,
-            address,
-            length,
-            self.int_to_bytelist(data, length))
+        for attempt in range(retries):
+            dxl_comm_result, dxl_error = self.packet_handler.regWriteTxRx(
+                self.port_handler,
+                self.id,
+                address,
+                length,
+                self.int_to_bytelist(data, length))
+            if dxl_comm_result == COMM_SUCCESS:
+                self.raise_errors(dxl_comm_result, dxl_error)
+                return
+            time.sleep(0.01)
         self.raise_errors(dxl_comm_result, dxl_error)
     
-    def read_bytes(self, address: int, length: int):
+    def read_bytes(self, address: int, length: int, retries=4):
         if address < 0:
             raise ValueError("Unsupported read address")
-        res, dxl_comm_result, dxl_error = self.packet_handler.readTxRx(
-            self.port_handler,
-            self.id,
-            address,
-            length)
+        for attempt in range(retries):
+            res, dxl_comm_result, dxl_error = self.packet_handler.readTxRx(
+                self.port_handler,
+                self.id,
+                address,
+                length)
+            if dxl_comm_result == COMM_SUCCESS:
+                self.raise_errors(dxl_comm_result, dxl_error)
+                return self.bytelist_to_int(res)
+            time.sleep(0.01)
         self.raise_errors(dxl_comm_result, dxl_error)
         return self.bytelist_to_int(res)
     

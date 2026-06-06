@@ -5,7 +5,7 @@ from andrew_robot import AndrewRobot
 
 def main():
     # The ports and config file path will likely need to be changed to try this example
-    robot = AndrewRobot('D:\\Resources\\andrew.xml', 'COM4', 250000, 'COM3')
+    robot = AndrewRobot('D:\\Resources\\andrew.xml', 'COM7', 250000, 'COM8')
     robot.max_speed = 50
     # LED needs time to init
     time.sleep(.1)

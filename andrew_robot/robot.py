@@ -2,11 +2,13 @@ from dynamixel_sdk import PortHandler, PacketHandler
 from .servo import Servo
 from .led import LedController
 from .config import AndrewConfig
+import time
 
 class AndrewRobot:
     DXL_PROTOCOL_VERSION = 1.0
     DXL_ALL_ID = 254
-    POSITION_ERROR_MARGIN = 10
+    # Reduced from 10 to 2 to tighten physical accuracy and fix 0.5mm XY tip drift
+    POSITION_ERROR_MARGIN = 2
     # TODO Most of these should be read from config files on the robot rather than being hardcoded
     # They may function incorrectly on the wrong model of robot
     SAFE_HEIGHT = 1600
@@ -274,6 +276,7 @@ class AndrewRobot:
         self.execute_staged_writes()
 
         done = False
+        timeout_start = time.time()
         while not done:
             done = True
             for s, p in zip(self.servos, positions):
@@ -281,6 +284,14 @@ class AndrewRobot:
                 if p is not None and abs(s.position - p) > self.POSITION_ERROR_MARGIN:
                     done = False
                     break
+            
+            # If stuck pushing an obstacle for more than 5 seconds without reaching goal, break out!
+            if not done and time.time() - timeout_start > 5.0:
+                print("Warning: Movement timeout! A servo didn't reach its exact target position.")
+                break
+                
+            if not done:
+                time.sleep(0.05) # Prevent serial buffer flooding!
 
     def enable_torque(self):
         for s in self.servos:

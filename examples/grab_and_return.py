@@ -28,8 +28,15 @@ def robot_movement():
         robot.grab_pipette(slot_index=target_slot)
         
         print("Pipette secured!")
+        robot.close_gripper() # Make sure it is securely held for pipetting
         
-        # Move away to arbitrary coordinates
+        print("Moving a little bit UP to clear the rack...")
+        # Since smaller linear numbers are physically higher up,
+        # we subtract 400 ticks from SAFE_HEIGHT to lift it extra high!
+        robot.move_arm_servos(linear=robot.SAFE_HEIGHT - 400)
+        time.sleep(1)
+        
+        # Move away to arbitrary coordinates to present it
         print("Moving the pipette away to present it to the user...")
         robot.move_arm_servos(shoulder=1871, elbow=1905, wrist=1977, linear=robot.SAFE_HEIGHT)
         time.sleep(2)
