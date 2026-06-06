@@ -46,8 +46,88 @@ class RobotGUI:
     def __init__(self, master):
         self.master = master
         master.title("Andrew Robot XY Map Controller")
-        master.geometry("500x600")
+        master.geometry("550x850")
+        master.configure(bg="#f0f2f5")
         
+        self.show_login()
+
+    def show_login(self):
+        self.login_frame = tk.Frame(self.master, bg="#ffffff", padx=40, pady=40, highlightthickness=1, highlightbackground="#cccccc")
+        self.login_frame.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
+        
+        tk.Label(self.login_frame, text="Login to Andrew Robot", font=("Segoe UI", 16, "bold"), bg="#ffffff").pack(pady=(0, 20))
+        
+        # Username
+        user_frame = tk.Frame(self.login_frame, bg="#ffffff")
+        user_frame.pack(fill=tk.X, pady=5)
+        tk.Label(user_frame, text="Username:", font=("Segoe UI", 10), bg="#ffffff").pack(side=tk.LEFT)
+        self.user_entry = tk.Entry(user_frame, font=("Segoe UI", 10), relief="flat", highlightthickness=1, highlightbackground="#cccccc")
+        self.user_entry.pack(side=tk.RIGHT, expand=True, fill=tk.X, padx=(10, 0))
+        
+        # Password
+        pass_frame = tk.Frame(self.login_frame, bg="#ffffff")
+        pass_frame.pack(fill=tk.X, pady=5)
+        tk.Label(pass_frame, text="Password:", font=("Segoe UI", 10), bg="#ffffff").pack(side=tk.LEFT)
+        self.pass_entry = tk.Entry(pass_frame, show="*", font=("Segoe UI", 10), relief="flat", highlightthickness=1, highlightbackground="#cccccc")
+        self.pass_entry.pack(side=tk.RIGHT, expand=True, fill=tk.X, padx=(10, 0))
+        
+        # Remember Me
+        self.remember_var = tk.BooleanVar()
+        self.remember_chk = tk.Checkbutton(self.login_frame, text="Remember Password", variable=self.remember_var, bg="#ffffff", font=("Segoe UI", 9))
+        self.remember_chk.pack(anchor=tk.W, pady=5)
+        
+        # Login button
+        self.login_btn = tk.Button(self.login_frame, text="Login", command=self.do_login, font=("Segoe UI", 10, "bold"), bg="#0d6efd", fg="white", relief="flat", pady=5)
+        self.login_btn.pack(fill=tk.X, pady=(10, 0))
+
+        self.login_err_lbl = tk.Label(self.login_frame, text="", font=("Segoe UI", 9), fg="red", bg="#ffffff")
+        self.login_err_lbl.pack(pady=(5, 0))
+
+        # Try to load saved credentials
+        self.load_credentials()
+        
+    def do_login(self):
+        username = self.user_entry.get()
+        password = self.pass_entry.get()
+        
+        if username == "admin" and password == "admin":
+            if self.remember_var.get():
+                self.save_credentials(username, password)
+            else:
+                self.clear_credentials()
+            
+            self.login_frame.destroy()
+            self.build_main_ui()
+        else:
+            self.login_err_lbl.config(text="Invalid credentials (try admin/admin)")
+
+    def save_credentials(self, username, password):
+        try:
+            with open("login.json", "w") as f:
+                json.dump({"username": username, "password": password}, f)
+        except Exception:
+            pass
+
+    def load_credentials(self):
+        try:
+            with open("login.json", "r") as f:
+                data = json.load(f)
+                if "username" in data and "password" in data:
+                    self.user_entry.insert(0, data["username"])
+                    self.pass_entry.insert(0, data["password"])
+                    self.remember_var.set(True)
+        except Exception:
+            pass
+            
+    def clear_credentials(self):
+        try:
+            import os
+            if os.path.exists("login.json"):
+                os.remove("login.json")
+        except Exception:
+            pass
+
+    def build_main_ui(self):
         self.canvas_size = 400
         # Set robot base somewhat near the center
         self.cx = self.canvas_size / 2
@@ -66,74 +146,82 @@ class RobotGUI:
         self.busy = False
         
         # UI Elements
-        self.info_label = tk.Label(master, text="Initializing Robot... Please Wait", font=("Arial", 12, "bold"))
-        self.info_label.pack(pady=10)
+        self.info_label = tk.Label(self.master, text="Initializing Robot... Please Wait", font=("Segoe UI", 12, "bold"), bg="#f0f2f5")
+        self.info_label.pack(pady=(15, 5))
         
-        self.coord_label = tk.Label(master, text=f"Target Location: X={self.target_x:.1f}, Y={self.target_y:.1f}", font=("Arial", 14))
+        self.coord_label = tk.Label(self.master, text=f"Target Location: X={self.target_x:.1f}, Y={self.target_y:.1f}", font=("Segoe UI", 14), bg="#f0f2f5")
         self.coord_label.pack(pady=5)
         
-        self.canvas = tk.Canvas(master, width=self.canvas_size, height=self.canvas_size, bg="white", highlightthickness=1, highlightbackground="black")
+        self.canvas = tk.Canvas(self.master, width=self.canvas_size, height=self.canvas_size, bg="#ffffff", highlightthickness=1, highlightbackground="#cccccc")
         self.canvas.pack(pady=10)
         self.canvas.bind("<Button-1>", self.on_canvas_click)
         
         self.draw_workspace()
         
-        btn_frame = tk.Frame(master)
-        btn_frame.pack(pady=10)
+        btn_frame = tk.Frame(self.master, bg="#ffffff", padx=10, pady=10)
+        btn_frame.pack(pady=5, fill=tk.X, padx=20)
         
-        self.go_btn = tk.Button(btn_frame, text="GO to target", command=self.cmd_go, width=15, font=("Arial", 10, "bold"), bg="lightblue")
-        self.go_btn.grid(row=0, column=0, padx=10)
+        self.go_btn = tk.Button(btn_frame, text="GO to target", command=self.cmd_go, width=15, font=("Segoe UI", 10, "bold"), bg="#0d6efd", fg="white", relief="flat", pady=5)
+        self.go_btn.grid(row=0, column=0, padx=5)
         
-        self.home_btn = tk.Button(btn_frame, text="HOME", command=self.cmd_home, width=15, font=("Arial", 10, "bold"))
-        self.home_btn.grid(row=0, column=1, padx=10)
+        self.home_btn = tk.Button(btn_frame, text="HOME", command=self.cmd_home, width=15, font=("Segoe UI", 10, "bold"), bg="#6c757d", fg="white", relief="flat", pady=5)
+        self.home_btn.grid(row=0, column=1, padx=5)
         
-        self.park_btn = tk.Button(btn_frame, text="PARK", command=self.cmd_park, width=15, font=("Arial", 10, "bold"), bg="lightcoral")
-        self.park_btn.grid(row=0, column=2, padx=10)
+        self.park_btn = tk.Button(btn_frame, text="PARK", command=self.cmd_park, width=15, font=("Segoe UI", 10, "bold"), bg="#dc3545", fg="white", relief="flat", pady=5)
+        self.park_btn.grid(row=0, column=2, padx=5)
+        
+        btn_frame.grid_columnconfigure(0, weight=1)
+        btn_frame.grid_columnconfigure(1, weight=1)
+        btn_frame.grid_columnconfigure(2, weight=1)
         
         # --- NEW: Saved Targeting ---
-        save_frame = tk.Frame(master)
-        save_frame.pack(pady=5)
+        save_frame = tk.Frame(self.master, bg="#ffffff", padx=10, pady=10)
+        save_frame.pack(pady=5, fill=tk.X, padx=20)
         
         self.ink_pos = None
         self.well_pos = None
         
-        self.save_ink_btn = tk.Button(save_frame, text="Save Robot Pos to INK", command=lambda: self.cmd_save_target("ink"), bg="#d1e7dd")
-        self.save_ink_btn.grid(row=0, column=0, padx=5)
+        self.save_ink_btn = tk.Button(save_frame, text="Save Robot Pos to INK", command=lambda: self.cmd_save_target("ink"), bg="#d1e7dd", font=("Segoe UI", 9), relief="flat", pady=3)
+        self.save_ink_btn.grid(row=0, column=0, padx=5, sticky="ew")
         
-        self.ink_lbl = tk.Label(save_frame, text="Ink: Not Set", font=("Arial", 9))
-        self.ink_lbl.grid(row=1, column=0)
+        self.ink_lbl = tk.Label(save_frame, text="Ink: Not Set", font=("Segoe UI", 9), bg="#ffffff")
+        self.ink_lbl.grid(row=1, column=0, pady=(2, 0))
         
-        self.save_well_btn = tk.Button(save_frame, text="Save Robot Pos to WELL", command=lambda: self.cmd_save_target("well"), bg="#fff3cd")
-        self.save_well_btn.grid(row=0, column=1, padx=5)
+        self.save_well_btn = tk.Button(save_frame, text="Save Robot Pos to WELL", command=lambda: self.cmd_save_target("well"), bg="#fff3cd", font=("Segoe UI", 9), relief="flat", pady=3)
+        self.save_well_btn.grid(row=0, column=1, padx=5, sticky="ew")
         
-        self.well_lbl = tk.Label(save_frame, text="Well: Not Set", font=("Arial", 9))
-        self.well_lbl.grid(row=1, column=1)
+        self.well_lbl = tk.Label(save_frame, text="Well: Not Set", font=("Segoe UI", 9), bg="#ffffff")
+        self.well_lbl.grid(row=1, column=1, pady=(2, 0))
 
-        self.print_run_btn = tk.Button(save_frame, text="RUN PRINT CYCLE", command=self.cmd_print_cycle, font=("Arial", 10, "bold"), bg="#f8d7da")
-        self.print_run_btn.grid(row=0, column=2, rowspan=2, padx=10)
+        self.print_run_btn = tk.Button(save_frame, text="RUN PRINT CYCLE", command=self.cmd_print_cycle, font=("Segoe UI", 10, "bold"), bg="#198754", fg="white", relief="flat", pady=5)
+        self.print_run_btn.grid(row=0, column=2, rowspan=2, padx=10, sticky="nsew")
+        
+        save_frame.grid_columnconfigure(0, weight=1)
+        save_frame.grid_columnconfigure(1, weight=1)
+        save_frame.grid_columnconfigure(2, weight=1)
         
         # --- NEW: Save/Load Configs ---
-        file_frame = tk.Frame(master)
-        file_frame.pack(pady=5)
+        file_frame = tk.Frame(self.master, bg="#ffffff", padx=10, pady=10)
+        file_frame.pack(pady=5, fill=tk.X, padx=20)
         
-        self.save_cfg_btn = tk.Button(file_frame, text="Save Config (.json)", command=self.cmd_save_cfg, width=20, bg="#e2e3e5")
-        self.save_cfg_btn.grid(row=0, column=0, padx=5)
+        self.save_cfg_btn = tk.Button(file_frame, text="Save Config (.json)", command=self.cmd_save_cfg, bg="#e2e3e5", font=("Segoe UI", 9), relief="flat", pady=3)
+        self.save_cfg_btn.pack(side=tk.LEFT, padx=5, expand=True, fill=tk.X)
         
-        self.load_cfg_btn = tk.Button(file_frame, text="Load Config (.json)", command=self.cmd_load_cfg, width=20, bg="#e2e3e5")
-        self.load_cfg_btn.grid(row=0, column=1, padx=5)
+        self.load_cfg_btn = tk.Button(file_frame, text="Load Config (.json)", command=self.cmd_load_cfg, bg="#e2e3e5", font=("Segoe UI", 9), relief="flat", pady=3)
+        self.load_cfg_btn.pack(side=tk.LEFT, padx=5, expand=True, fill=tk.X)
         
         # Z-Axis (Linear) Controls
-        z_frame = tk.Frame(master)
-        z_frame.pack(pady=5)
-        tk.Label(z_frame, text="Z-Axis (Vertical):").pack(side=tk.LEFT, padx=5)
+        z_frame = tk.Frame(self.master, bg="#ffffff", padx=10, pady=10)
+        z_frame.pack(pady=5, fill=tk.X, padx=20)
+        tk.Label(z_frame, text="Z-Axis (Vertical):", font=("Segoe UI", 10, "bold"), bg="#ffffff").pack(side=tk.LEFT, padx=5)
         
-        self.z_up_btn = tk.Button(z_frame, text="UP ↑", width=10, bg="#e0e0e0")
-        self.z_up_btn.pack(side=tk.LEFT, padx=5)
+        self.z_up_btn = tk.Button(z_frame, text="UP ↑", width=10, bg="#f8f9fa", font=("Segoe UI", 9), relief="flat", pady=3)
+        self.z_up_btn.pack(side=tk.LEFT, padx=5, expand=True, fill=tk.X)
         self.z_up_btn.bind("<ButtonPress-1>", lambda e: self.z_jog_start("up"))
         self.z_up_btn.bind("<ButtonRelease-1>", lambda e: self.z_jog_stop())
         
-        self.z_down_btn = tk.Button(z_frame, text="DOWN ↓", width=10, bg="#e0e0e0")
-        self.z_down_btn.pack(side=tk.LEFT, padx=5)
+        self.z_down_btn = tk.Button(z_frame, text="DOWN ↓", width=10, bg="#f8f9fa", font=("Segoe UI", 9), relief="flat", pady=3)
+        self.z_down_btn.pack(side=tk.LEFT, padx=5, expand=True, fill=tk.X)
         self.z_down_btn.bind("<ButtonPress-1>", lambda e: self.z_jog_start("down"))
         self.z_down_btn.bind("<ButtonRelease-1>", lambda e: self.z_jog_stop())
         
@@ -141,14 +229,14 @@ class RobotGUI:
         self.z_jog_thread = None
 
         # Gripper Controls
-        grip_frame = tk.Frame(master)
-        grip_frame.pack(pady=5)
+        grip_frame = tk.Frame(self.master, bg="#ffffff", padx=10, pady=10)
+        grip_frame.pack(pady=5, fill=tk.X, padx=20)
         
-        self.open_grip_btn = tk.Button(grip_frame, text="Open Gripper (Insert Pipette)", command=self.cmd_open_gripper, width=25, bg="#e2e3e5")
-        self.open_grip_btn.pack(side=tk.LEFT, padx=5)
+        self.open_grip_btn = tk.Button(grip_frame, text="Open Gripper (Insert Pipette)", command=self.cmd_open_gripper, bg="#e2e3e5", font=("Segoe UI", 9), relief="flat", pady=3)
+        self.open_grip_btn.pack(side=tk.LEFT, padx=5, expand=True, fill=tk.X)
         
-        self.close_grip_btn = tk.Button(grip_frame, text="Close Gripper (Lock Pipette)", command=self.cmd_close_gripper, width=25, bg="#e2e3e5")
-        self.close_grip_btn.pack(side=tk.LEFT, padx=5)
+        self.close_grip_btn = tk.Button(grip_frame, text="Close Gripper (Lock Pipette)", command=self.cmd_close_gripper, bg="#e2e3e5", font=("Segoe UI", 9), relief="flat", pady=3)
+        self.close_grip_btn.pack(side=tk.LEFT, padx=5, expand=True, fill=tk.X)
         
         # Start connection in background to prevent freezing UI
         threading.Thread(target=self.init_robot, daemon=True).start()

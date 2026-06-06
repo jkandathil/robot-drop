@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Andrew Robot Controller</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f0f2f5;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+    }
+    .card {
+      background-color: #ffffff;
+      padding: 40px;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      width: 300px;
+      margin-bottom: 20px;
+    }
+    h2 {
+      margin-top: 0;
+      color: #333;
+      text-align: center;
+    }
+    .input-group {
+      margin-bottom: 15px;
+    }
+    .input-group label {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 14px;
+      color: #666;
+    }
+    .input-group input {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      box-sizing: border-box;
+      font-family: 'Segoe UI', sans-serif;
+    }
+    .btn {
+      width: 100%;
+      padding: 10px;
+      border: none;
+      border-radius: 4px;
+      background-color: #00DE93; /* Pantone #00DE93 */
+      color: white;
+      font-weight: bold;
+      font-size: 16px;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+    .btn:hover {
+      background-color: #00c784;
+    }
+    #error-msg {
+      color: red;
+      font-size: 12px;
+      margin-top: 10px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="login-view" class="card">
+    <div style="text-align: center; margin-bottom: 20px;">
+      <img src="../logo_noze/noze_logo.png" alt="Noze Logo" style="max-width: 150px;">
+    </div>
+    <h2>Andrew Robot Login</h2>
+    <div class="input-group">
+      <label>Username</label>
+      <input type="text" id="username" placeholder="admin">
+    </div>
+    <div class="input-group">
+      <label>Password</label>
+      <input type="password" id="password" placeholder="admin">
+    </div>
+    <button class="btn" onclick="login()">Login</button>
+    <div id="error-msg"></div>
+  </div>
+
+  <div id="main-view" class="card" style="display: none; width: 500px;">
+    <h2>Andrew Dashboard</h2>
+    <div id="status-msg" style="text-align: center; color: #198754; font-weight:bold; margin-bottom: 15px;">Disconnected</div>
+    
+    <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+      <button class="btn" style="background-color: #0d6efd" onclick="initRobot()">Init Robot</button>
+      <button class="btn" style="background-color: #6c757d" onclick="sendCommand('/home')">HOME</button>
+      <button class="btn" style="background-color: #dc3545" onclick="sendCommand('/park')">PARK</button>
+    </div>
+
+    <canvas id="workspace" width="400" height="400" style="background: white; border: 1px solid #ccc; display: block; margin: 0 auto;"></canvas>
+    <div style="text-align: center; margin-top: 10px;" id="coords">Target: X=0.0, Y=200.0</div>
+
+    <button class="btn" onclick="goTarget()">GO To Target</button>
+  </div>
+
+  <script>
+    let targetX = 0;
+    let targetY = 200;
+    const SERVER = 'http://localhost:5000';
+    
+    function setStatus(msg, isError=false) {
+      const el = document.getElementById('status-msg');
+      el.innerText = msg;
+      el.style.color = isError ? 'red' : '#198754';
+    }
+
+    async function sendCommand(endpoint, body = null) {
+      setStatus(`Sending ${endpoint}...`);
+      try {
+        let res = await fetch(SERVER + endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: body ? JSON.stringify(body) : null
+        });
+        let data = await res.json();
+        if (data.status === 'success') {
+          setStatus(data.message || 'Success');
+        } else {
+          setStatus(data.message || 'Error', true);
+        }
+      } catch (err) {
+        setStatus('Connection Error', true);
+      }
+    }
+
+    function initRobot() {
+      sendCommand('/init');
+    }
+
+    function goTarget() {
+      // Python's backend expects robot X and Y (where X is forward, Y is left/right)
+      // the canvas X is left/right, canvas Y is forward
+      sendCommand('/go', { x: targetY, y: -targetX });
+    }
+
+    // Canvas drawing
+    const canvas = document.getElementById('workspace');
+    const ctx = canvas.getContext('2d');
+    const scale = 180.0 / 350.0;
+    const cx = 200, cy = 200;
+    
+    function drawWorkspace() {
+      ctx.clearRect(0,0,400,400);
+      ctx.strokeStyle = '#f0f0f0';
+      for(let i=0; i<=400; i+=50) {
+        ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,400); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(400,i); ctx.stroke();
+      }
+      ctx.strokeStyle = '#aaa';
+      ctx.beginPath(); ctx.moveTo(cx,0); ctx.lineTo(cx,400); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0,cy); ctx.lineTo(400,cy); ctx.stroke();
+      
+      // Target
+      let tx_pix = cx + (targetX * scale);
+      let ty_pix = cy - (targetY * scale);
+      ctx.fillStyle = '#00DE93'; // Using your pantone color
+      ctx.beginPath(); ctx.arc(tx_pix, ty_pix, 6, 0, 2*Math.PI); ctx.fill();
+    }
+
+    canvas.addEventListener('click', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const clickY = e.clientY - rect.top;
+      
+      targetX = (clickX - cx) / scale;
+      targetY = (cy - clickY) / scale;
+      document.getElementById('coords').innerText = `Target: X=${targetX.toFixed(1)}, Y=${targetY.toFixed(1)}`;
+      drawWorkspace();
+    });
+
+    drawWorkspace();
+
+    function login() {
+      const user = document.getElementById('username').value;
+      const pass = document.getElementById('password').value;
+      
+      if (user === 'admin' && pass === 'admin') {
+        document.getElementById('login-view').style.display = 'none';
+        document.getElementById('main-view').style.display = 'block';
+      } else {
+        document.getElementById('error-msg').innerText = 'Invalid credentials';
+      }
+    }
+  </script>
+</body>
+</html>

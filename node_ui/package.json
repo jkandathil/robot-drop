@@ -1,0 +1,14 @@
+{
+  "name": "andrew-robot-desktop",
+  "version": "1.0.0",
+  "description": "Desktop Interface for Andrew Robot",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^25.9.8"
+  }
+}
