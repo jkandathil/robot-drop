@@ -4,77 +4,181 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Andrew Robot Controller</title>
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="favicon-180.png">
   <style>
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background-color: #f0f2f5;
-      margin: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
+    :root{
+      --noze:#00DE93; --noze-dark:#00c784; --noze-soft:#E6FBF3; --noze-ink:#047857;
+      --ink:#1E293B; --muted:#64748B; --line:#E2E8F0;
+      --bg:#F4F7FB; --card:#FFFFFF; --danger:#DC2626; --danger-soft:#FEF2F2;
     }
-    .card {
-      background-color: #ffffff;
-      padding: 40px;
-      border-radius: 8px;
-      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-      width: 300px;
-      margin-bottom: 20px;
+    body.dark-theme {
+      --noze-soft:#064E3B; --noze-ink:#34D399;
+      --ink:#F8FAFC; --muted:#94A3B8; --line:#334155;
+      --bg:#0F172A; --card:#1E293B; --danger-soft:#7F1D1D;
     }
-    h2 {
-      margin-top: 0;
-      color: #333;
-      text-align: center;
+    * {box-sizing:border-box;}
+    body{
+      font-family:'SF Compact Display','SF Compact Text','SF Compact','SF Compact Rounded',-apple-system,BlinkMacSystemFont,'Helvetica Neue','Segoe UI',sans-serif;
+      background:var(--bg); margin:0; color:var(--ink);
+      min-height:100vh; display:flex; align-items:center; justify-content:center;
     }
-    .input-group {
-      margin-bottom: 15px;
+    h2,h3,h4{color:var(--ink); margin-top:0;}
+    h2{margin-bottom:24px;}
+    h3{font-size:15px; margin-bottom:14px; display:flex; align-items:center; gap:8px;}
+    h4{font-size:13px; color:var(--muted);}
+
+    /* ---------- Login ---------- */
+    #login-view.card{padding:40px; width:320px;}
+    #login-view h2{text-align:center;}
+
+    /* ---------- App shell ---------- */
+    #main-view{display:none; width:100%;}
+    .app-shell{display:flex; min-height:100vh; width:100%;}
+    .sidebar{
+      width:240px; flex:0 0 240px; background:var(--card); border-right:1px solid var(--line);
+      display:flex; flex-direction:column; padding:24px 16px; gap:8px;
+      position:sticky; top:0; height:100vh; overflow-y:auto;
     }
-    .input-group label {
-      display: block;
-      margin-bottom: 5px;
-      font-size: 14px;
-      color: #666;
+    .sidebar .logo{max-width:78px; margin:4px auto 18px; display:block;}
+
+    /* Workspace files docked in the sidebar (collapsible) */
+    .sidebar-files{margin-top:16px; display:flex; flex-direction:column; flex:1 1 auto; min-height:150px;}
+    .sidebar-files.collapsed{flex:0 0 auto; min-height:0;}
+    .sidebar-files-head{
+      display:flex; align-items:center; gap:8px; width:100%; padding:7px 8px; margin:0 0 6px;
+      background:transparent; border:none; border-radius:8px; cursor:pointer; font-family:inherit;
+      font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:#94A3B8;
     }
-    .input-group input {
-      width: 100%;
-      padding: 8px;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-      box-sizing: border-box;
-      font-family: 'Segoe UI', sans-serif;
+    .sidebar-files-head:hover{background:#F1F5F9; color:var(--muted);}
+    .sidebar-files-head .chev{font-size:10px; transition:transform .15s ease;}
+    .sidebar-files.collapsed .sidebar-files-head .chev{transform:rotate(-90deg);}
+    .sidebar-files-body{display:flex; flex-direction:column; flex:1 1 auto; min-height:0;}
+    .sidebar-files.collapsed .sidebar-files-body{display:none;}
+    .sidebar-files .file-list-container{height:auto; flex:1 1 auto; min-height:0;}
+    .sidebar #file-list li{white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:13px;}
+    .nav{display:flex; flex-direction:column; gap:4px;}
+    .nav-btn{
+      display:flex; align-items:center; gap:12px; width:100%; text-align:left;
+      padding:12px 14px; border:none; background:transparent; border-radius:10px;
+      color:var(--muted); font-size:14px; font-weight:600; cursor:pointer;
+      transition:all .15s ease; font-family:inherit;
     }
-    .btn {
-      width: 100%;
-      padding: 10px;
-      border: none;
-      border-radius: 4px;
-      background-color: #00DE93; /* Pantone #00DE93 */
-      color: white;
-      font-weight: bold;
-      font-size: 16px;
-      cursor: pointer;
-      margin-top: 10px;
+    .nav-btn span{font-size:17px; width:22px; text-align:center;}
+    .nav-btn:hover{background:#F1F5F9; color:var(--ink);}
+    .nav-btn.active{background:var(--noze-soft); color:var(--noze-ink);}
+    .sidebar-foot{margin-top:auto; padding-top:12px; display:flex; flex-direction:column; gap:8px;}
+    .nav-foot{font-size:11px; color:#94A3B8; text-align:center;}
+    .nav-signout{justify-content:center;}
+
+    .content{flex:1; min-width:0; display:flex; flex-direction:column; max-height:100vh; overflow-y:auto;
+      background:
+        radial-gradient(820px 420px at 82% -120px, var(--noze-soft), transparent 68%),
+        radial-gradient(620px 360px at 8% 108%, var(--noze-soft), transparent 70%),
+        var(--bg);}
+    .topbar{
+      position:sticky; top:0; z-index:5; background:rgba(244,247,251,.92); backdrop-filter:blur(8px);
+      display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;
+      padding:13px 26px; border-bottom:1px solid var(--line);
     }
-    .btn:hover {
-      background-color: #00c784;
+    .page-title{font-size:20px; font-weight:700; color:var(--ink);}
+    .topbar-actions{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+    .btn.tb-btn{padding:8px 13px; font-size:13px;}
+    .tb-sep{width:1px; align-self:stretch; min-height:24px; background:var(--line); margin:0 4px;}
+    .btn.tb-estop{background:var(--danger); color:#fff; border:none; font-weight:700;}
+    .btn.tb-estop:hover{background:#b91c1c;}
+    .status-pill{
+      font-size:13px; font-weight:600; color:var(--muted);
+      background:var(--card); border:1px solid var(--line); border-radius:999px;
+      padding:8px 16px; box-shadow:0 1px 2px rgba(0,0,0,.03); white-space:nowrap;
     }
-    #error-msg {
-      color: red;
-      font-size: 12px;
-      margin-top: 10px;
-      text-align: center;
+    .pages{padding:22px 26px; max-width:1500px;}
+    .page{animation:fade .2s ease;}
+    @keyframes fade{from{opacity:0; transform:translateY(4px);}to{opacity:1; transform:none;}}
+
+    /* ---------- Cards ---------- */
+    .card,.card-panel{
+      background:var(--card); border:1px solid var(--line); border-radius:16px;
+      box-shadow:0 1px 2px rgba(15,23,42,.04), 0 12px 32px -14px rgba(15,23,42,.13);
     }
+    .card-panel{padding:20px; display:flex; flex-direction:column; gap:10px;}
+    /* Card title: brand accent bar + hairline divider for clear visual hierarchy. */
+    .card-panel > h3{
+      margin:0 0 15px; padding-bottom:13px; font-size:15px; font-weight:700;
+      border-bottom:1px solid var(--line); display:flex; align-items:center; gap:9px;
+    }
+    .card-panel > h3::before{
+      content:""; flex:0 0 auto; width:4px; height:15px; border-radius:3px;
+      background:linear-gradient(180deg, var(--noze), var(--noze-dark));
+    }
+    /* Dashboard cards gently lift on hover so the surface feels alive and tactile. */
+    .dashboard-grid .card-panel{transition:transform .2s ease, box-shadow .2s ease;}
+    .dashboard-grid .card-panel:hover{
+      transform:translateY(-2px);
+      box-shadow:0 4px 10px rgba(15,23,42,.05), 0 22px 46px -16px rgba(15,23,42,.20);
+    }
+
+    /* ---------- Layout helpers ---------- */
+    /* Dashboard: two balanced columns. Each pairs a short control card with a tall
+       calibration card so the columns end at nearly equal height (no dead space).
+       Centred and capped so cards stay compact; the brand wash fills the margins. */
+    .dashboard-grid{display:flex; flex-wrap:wrap; gap:18px; align-items:flex-start; justify-content:center;}
+    .dash-col{flex:1 1 300px; max-width:392px; min-width:0; display:flex; flex-direction:column; gap:18px;}
+    @media(max-width:720px){.dash-col{flex-basis:100%; max-width:none;}}
+    .dashboard-grid .card-panel{margin:0;}
+    .row-flex{display:flex; gap:10px; flex-wrap:nowrap;}
+    /* Buttons sharing a row shrink to fit instead of wrapping below their label. */
+    .row-flex .btn{min-width:0;}
+    .align-center{align-items:center;}
+    .label-fixed{width:92px; flex:0 0 92px; white-space:nowrap;}
+
+    /* ---------- Inputs ---------- */
+    .input-group{margin-bottom:16px;}
+    .input-group label{display:block; margin-bottom:6px; font-size:13px; color:var(--muted);}
+    .input-group input{width:100%; padding:11px; border:1px solid var(--line); border-radius:9px; font-family:inherit;}
+    input,select{font-family:inherit; color:var(--ink);}
+    input:focus,select:focus{outline:none; border-color:var(--noze); box-shadow:0 0 0 3px var(--noze-soft);}
+
+    /* ---------- Buttons ---------- */
+    .btn{
+      padding:7px 11px; border:1px solid var(--line); border-radius:9px; background:#fff; color:var(--ink);
+      font-weight:600; font-size:13px; cursor:pointer; transition:all .15s ease;
+      display:inline-flex; align-items:center; justify-content:center; gap:6px; font-family:inherit;
+      white-space:nowrap;
+    }
+    .btn:hover{transform:translateY(-1px); box-shadow:0 4px 10px rgba(15,23,42,.08);}
+    .btn:active{transform:translateY(0);}
+    .btn-primary{background:#F8FAFC; border:1px solid #CBD5E1; color:#334155;}
+    .btn-primary:hover{background:#F1F5F9;}
+    .btn-accent{background:var(--noze); color:#fff; border:none;}
+    .btn-accent:hover{background:var(--noze-dark);}
+    .btn-print{background:#16A34A; color:#fff; border:none;}
+    .btn-print:hover{background:#15803d;}
+    .btn-danger{background:var(--danger-soft); border:1px solid #FCA5A5; color:var(--danger);}
+    .btn-danger:hover{background:#FEE2E2;}
+
+    /* ---------- Legacy tab bar (now hidden; nav is the sidebar) ---------- */
+    .tabs{display:none;}
+
+    #error-msg{color:var(--danger); font-size:12px; margin-top:10px; text-align:center;}
+
+    .file-list-container{border:1px solid var(--line); border-radius:9px; padding:10px; height:180px; overflow-y:auto;}
+    #file-list{list-style:none; padding:0; margin:0; font-size:14px;}
+    #file-list li{padding:9px 8px; cursor:pointer; border-radius:6px; border-bottom:1px solid #F1F5F9;}
+    #file-list li:last-child{border-bottom:none;}
+    #file-list li:hover{background:#F8FAFC;}
+
+    #workspace{background:#fff; border:1px solid var(--line); border-radius:9px; display:block; margin:0 auto;}
   </style>
 </head>
 <body>
 
   <div id="login-view" class="card">
-    <div style="text-align: center; margin-bottom: 20px;">
-      <img src="../logo_noze/noze_logo.png" alt="Noze Logo" style="max-width: 150px;">
+    <div style="text-align: center; margin-bottom: 24px;">
+      <img src="../logo_noze/noze_logo.png?v=2" alt="Noze Logo" style="max-width: 140px;">
     </div>
-    <h2>Andrew Robot Login</h2>
+    <h2>Andrew Robot</h2>
     <div class="input-group">
       <label>Username</label>
       <input type="text" id="username" placeholder="admin">
@@ -83,30 +187,653 @@
       <label>Password</label>
       <input type="password" id="password" placeholder="admin">
     </div>
-    <button class="btn" onclick="login()">Login</button>
+    <button class="btn btn-accent" style="width:100%;" onclick="login()">Sign In</button>
     <div id="error-msg"></div>
   </div>
 
-  <div id="main-view" class="card" style="display: none; width: 500px;">
-    <h2>Andrew Dashboard</h2>
-    <div id="status-msg" style="text-align: center; color: #198754; font-weight:bold; margin-bottom: 15px;">Disconnected</div>
-    
-    <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-      <button class="btn" style="background-color: #0d6efd" onclick="initRobot()">Init Robot</button>
-      <button class="btn" style="background-color: #6c757d" onclick="sendCommand('/home')">HOME</button>
-      <button class="btn" style="background-color: #dc3545" onclick="sendCommand('/park')">PARK</button>
-    </div>
+  <div id="main-view">
+   <div class="app-shell">
+    <aside class="sidebar">
+      <img class="logo" src="../logo_noze/noze_logo.png?v=2" alt="Noze">
+      <nav class="nav">
+        <button id="nav-dashboard" class="nav-btn active" onclick="switchTab('dashboard')"><span>&#128268;</span> Connect</button>
+        <button id="nav-cal" class="nav-btn" onclick="switchTab('cal')"><span>&#128208;</span> Calibrate</button>
+        <button id="nav-print" class="nav-btn" onclick="switchTab('print')"><span>&#128424;</span> Print</button>
+        <button id="nav-map" class="nav-btn" onclick="switchTab('map')"><span>&#128506;</span> Workspace Map</button>
+        <button id="nav-sequence" class="nav-btn" onclick="switchTab('sequence')"><span>&#128203;</span> Sequence</button>
+        <button id="nav-tools" class="nav-btn" onclick="switchTab('tools')"><span>&#128295;</span> Advanced Tools</button>
+      </nav>
+      <div class="sidebar-files">
+        <button class="sidebar-files-head" onclick="this.parentElement.classList.toggle('collapsed')" title="Show / hide workspace files">
+          <span class="chev">&#9662;</span><span>Workspace Files</span>
+        </button>
+        <div class="sidebar-files-body">
+          <div class="file-list-container">
+            <ul id="file-list"></ul>
+          </div>
+          <div class="row-flex" style="margin-top:8px;">
+            <button class="btn btn-primary" style="flex:1;" onclick="loadRoutine()">&#128193; Load</button>
+            <button class="btn btn-primary" style="flex:1;" onclick="alert('Save to Workspace')">&#128190; Save</button>
+          </div>
+          <label style="font-size:11px; color:#64748B; display:flex; align-items:center; gap:5px; margin-top:6px; cursor:pointer;"
+                 title="On load, proportionally resize &amp; center the pattern inside the taught dispensing-wells area (use after re-calibrating corners)">
+            <input type="checkbox" id="fit-on-load" checked> Fit to wells area at
+            <input type="number" id="fit-scale" value="90" min="10" max="100" step="5" style="width:48px; padding:3px;" onclick="event.preventDefault()">%
+          </label>
+        </div>
+      </div>
+      <div class="sidebar-foot">
+        <button id="theme-toggle" class="btn btn-primary" onclick="toggleTheme()" style="justify-content:center; border-color:var(--line); background:transparent;">&#127769; Dark Mode</button>
+        <button class="btn btn-primary nav-signout" onclick="signOut()">&#9094; Sign Out</button>
+        <div class="nav-foot">Andrew Robot &middot; v1.0</div>
+      </div>
+    </aside>
+    <main class="content">
+      <header class="topbar" style="justify-content: flex-start;">
+        <div class="topbar-actions" style="flex:1;">
+          <button class="btn btn-primary tb-btn" onclick="initRobot()">&#9889; Init</button>
+          <button class="btn btn-primary tb-btn" onclick="sendCommand('/home')">&#127968; Home</button>
+          <button class="btn btn-primary tb-btn" onclick="sendCommand('/park')">&#127359; Park</button>
+          <span class="tb-sep"></span>
+          <button class="btn tb-btn tb-estop" onclick="emergencyShutdown()" title="Emergency Stop">&#9940;</button>
+        </div>
+      </header>
+      <!-- Modern Status Banner -->
+      <div style="background: var(--card); border-bottom: 1px solid var(--line); padding: 10px 26px; display: flex; align-items: center; gap: 8px;">
+        <span style="font-size:16px;">ℹ️</span>
+        <div id="status-msg" style="font-size: 14px; font-weight: 600; color: var(--muted); flex:1;">Disconnected</div>
+      </div>
+      <div class="pages">
 
-    <canvas id="workspace" width="400" height="400" style="background: white; border: 1px solid #ccc; display: block; margin: 0 auto;"></canvas>
-    <div style="text-align: center; margin-top: 10px;" id="coords">Target: X=0.0, Y=200.0</div>
+    <div id="tab-dashboard" class="dashboard-grid">
+      
+      <!-- Column 1: Manual Overrides (short) + Grab Calibration (tall) -->
+      <div class="dash-col">
 
-    <button class="btn" onclick="goTarget()">GO To Target</button>
-  </div>
+
+        <!-- Manual Overrides -->
+        <div class="card-panel">
+          <h3>Manual Overrides</h3>
+          <div class="row-flex align-center">
+            <strong class="label-fixed">Z-Axis:</strong>
+            <button class="btn btn-primary" 
+                    onmousedown="sendCommand('/z_jog/start', {direction: 'up', speed: 'fast'})"
+                    onmouseup="sendCommand('/z_jog/stop')"
+                    onmouseleave="sendCommand('/z_jog/stop')">⬆️ Up</button>
+            <button class="btn btn-primary" 
+                    onmousedown="sendCommand('/z_jog/start', {direction: 'down', speed: 'fast'})"
+                    onmouseup="sendCommand('/z_jog/stop')"
+                    onmouseleave="sendCommand('/z_jog/stop')">⬇️ Down</button>
+          </div>
+          <div class="row-flex align-center">
+            <strong class="label-fixed">Grip:</strong>
+            <button class="btn btn-primary" onclick="sendCommand('/gripper/open')">👐 Open</button>
+            <button class="btn btn-primary" onclick="sendCommand('/gripper/close')">✊ Close</button>
+          </div>
+        </div>
+
+        <!-- Grab Calibration -->
+        <div class="card-panel">
+          <h3>Grab Calibration</h3>
+          <p style="font-size: 12px; color: #64748B; margin: 0 0 10px 0;">
+            Teach a custom grab pose for the slot selected above — for pipettes the factory
+            positions don't reach (e.g. Rainin LTS). Go to the slot, then jog the open gripper
+            <b>In</b> onto the pipette body and nudge <b>Z</b> for height, then save. The saved
+            pose overrides the factory grab depth for that slot.
+          </p>
+          <div class="row-flex align-center">
+            <button class="btn btn-primary" style="flex: 1;" onclick="grabCalGoto()">🎯 Go to Slot</button>
+          </div>
+          <div class="row-flex align-center" style="margin-top: 10px;">
+            <strong class="label-fixed">Approach:</strong>
+            <button class="btn btn-primary" style="flex:1;"
+                    onmousedown="grabCalApproachJog('in')"
+                    onmouseup="sendCommand('/grab_cal/approach_jog/stop')"
+                    onmouseleave="sendCommand('/grab_cal/approach_jog/stop')">➡️ In</button>
+            <button class="btn btn-primary" style="flex:1;"
+                    onmousedown="grabCalApproachJog('out')"
+                    onmouseup="sendCommand('/grab_cal/approach_jog/stop')"
+                    onmouseleave="sendCommand('/grab_cal/approach_jog/stop')">⬅️ Out</button>
+          </div>
+          <div class="row-flex align-center" style="margin-top: 10px;">
+            <strong class="label-fixed">Z Nudge:</strong>
+            <button class="btn btn-primary" style="flex:1;"
+                    onmousedown="sendCommand('/z_jog/start', {direction: 'down', speed: 'medium'})"
+                    onmouseup="sendCommand('/z_jog/stop')"
+                    onmouseleave="sendCommand('/z_jog/stop')">⬇️ Down</button>
+            <button class="btn btn-primary" style="flex:1;"
+                    onmousedown="sendCommand('/z_jog/start', {direction: 'up', speed: 'medium'})"
+                    onmouseup="sendCommand('/z_jog/stop')"
+                    onmouseleave="sendCommand('/z_jog/stop')">⬆️ Up</button>
+          </div>
+          <div class="row-flex align-center" style="margin-top: 10px;">
+            <button class="btn btn-primary" style="background-color: #F59E0B; color: white; border: none; flex: 1; white-space: normal;" onclick="grabCalSave()">💾 Grab Pose</button>
+            <button class="btn btn-primary" style="flex: 1;" title="Move the gripper back out without grabbing the pipette" onclick="grabCalRetract()">↩️ Retract</button>
+          </div>
+          <div class="row-flex align-center" style="margin-top: 10px;">
+            <button class="btn btn-primary" style="flex: 1;" onclick="grabPipette()">🧪 Test Grab</button>
+            <button class="btn btn-primary" style="background-color: #EF4444; color: white; border: none; flex: 1; white-space: normal;" onclick="grabCalClear()">🗑 Override</button>
+          </div>
+          <div class="row-flex align-center" style="margin-top: 10px;">
+            <button class="btn btn-primary" style="flex: 1;" title="Release the arm so you can hand-guide it instead of jogging" onclick="grabCalTeach()">🖐 Free Arm</button>
+          </div>
+          <p id="grab-cal-status" style="font-size: 12px; color: #64748B; margin: 10px 0 0 0;">Loading taught poses…</p>
+        </div>
+      </div> <!-- Close Column 1 -->
+
+      <!-- Column 2: Pipette Control (short) + Thumb Calibration (tall) -->
+      <div class="dash-col">
+
+        <!-- Pipette Control -->
+        <div class="card-panel">
+          <h3>Pipette Control</h3>
+          <div class="row-flex align-center" style="gap: 10px;">
+            <select id="pipette-slot" onchange="updateGrabCalStatus()" style="padding: 10px; border: 1px solid #E2E8F0; border-radius: 8px; flex: 1;">
+              <option value="5">P2 (Furthest)</option>
+              <option value="4">P10</option>
+              <option value="3">P20</option>
+              <option value="2">P200</option>
+              <option value="1">P1000 (Closest)</option>
+            </select>
+            <button class="btn btn-primary" style="flex: 1;" onclick="grabPipette()">💉 Grab</button>
+          </div>
+        </div>
+
+        <!-- Thumb Calibration -->
+        <div class="card-panel">
+          <h3>Thumb Calibration</h3>
+          <p style="font-size: 12px; color: #64748B; margin: 0 0 10px 0;">Jog the thumb and save the aspirate plunge limit for the selected pipette. The jog slows to 1/5 speed past 60% of travel, where the plunger engages, for fine positioning.</p>
+          <div class="row-flex align-center">
+            <strong class="label-fixed">Jog:</strong>
+            <button class="btn btn-primary" style="flex:1;"
+                    onmousedown="sendCommand('/thumb_jog/start', {direction: 'down'})"
+                    onmouseup="sendCommand('/thumb_jog/stop')"
+                    onmouseleave="sendCommand('/thumb_jog/stop')">⬇️ Down</button>
+            <button class="btn btn-primary" style="flex:1;"
+                    onmousedown="sendCommand('/thumb_jog/start', {direction: 'up'})"
+                    onmouseup="sendCommand('/thumb_jog/stop')"
+                    onmouseleave="sendCommand('/thumb_jog/stop')">⬆️ Up</button>
+          </div>
+          <div class="row-flex align-center" style="margin-top: 10px;">
+            <button class="btn btn-primary" style="background-color: #F59E0B; color: white; border: none; flex: 1; white-space: normal;" onclick="saveThumbPos('/save_thumb_pos')">💾 Aspirate</button>
+            <button class="btn btn-primary" style="background-color: #EF4444; color: white; border: none; flex: 1; white-space: normal;" onclick="saveThumbPos('/save_thumb_dispense_pos')">💾 Dispense</button>
+          </div>
+          <p id="thumb-save-status" style="font-size: 12px; color: #64748B; margin: 10px 0 0 0;">Loading saved positions…</p>
+          
+          <hr style="width: 100%; border: 0; border-top: 1px solid #E2E8F0; margin: 10px 0;">
+          <h4 style="margin: 0 0 10px 0; font-size: 13px; color: #64748B;">Test Plunge Actions</h4>
+          <p style="font-size: 12px; color: #64748B; margin: 0 0 10px 0;">
+            Runs the full cycle: plunge to the saved position, hold for the aspirate/dispense
+            time, then return to neutral automatically.
+          </p>
+          <div class="row-flex align-center">
+            <strong class="label-fixed">Hold (s):</strong>
+            <input id="plunge-hold" type="number" value="2" min="0" max="10" step="0.5"
+                   style="width: 70px; padding: 8px; border: 1px solid #E2E8F0; border-radius: 8px;">
+          </div>
+          <div class="row-flex align-center" style="margin-top: 10px;">
+            <button class="btn btn-primary" style="flex:1;" onclick="testPlunge('/test_aspirate')">Test Aspirate</button>
+            <button class="btn btn-primary" style="flex:1;" onclick="testPlunge('/test_dispense')">Test Dispense</button>
+          </div>
+          <div class="row-flex align-center" style="margin-top: 10px;">
+            <button class="btn btn-primary" style="flex: 1;" onclick="sendCommand('/thumb_neutral')">Return to Neutral</button>
+            <button class="btn btn-primary" style="background-color: #F59E0B; color: white; border: none; flex: 1;" onclick="sendCommand('/eject_tip')">⏏️ Eject Tip</button>
+          </div>
+        </div>
+
+      </div> <!-- Close Tooling -->
+    </div> <!-- Close tab-dashboard -->
+
+    <!-- Third Column: Task Designer -->
+    <div id="tab-sequence" style="display: none; align-items: start; justify-content: flex-start; flex-wrap: wrap; flex-direction: row; gap: 18px;">
+      <div class="card-panel" style="display: flex; flex-direction: column; gap: 15px; width: 450px;">
+        <h3 style="margin-top: 0; margin-bottom: 5px; font-size: 16px;">Sequence Designer</h3>
+        
+        <div>
+          <h4 style="margin: 0 0 10px 0; font-size: 13px; color: #64748B;">1. Defined Locations</h4>
+          <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+              <button class="btn btn-primary" style="flex: 1; padding: 6px; font-size: 13px;" onclick="addLocation('INK')">📍 Add Ink</button>
+              <button class="btn btn-primary" style="flex: 1; padding: 6px; font-size: 13px;" onclick="addLocation('WELL')">📍 Add Well</button>
+          </div>
+          <div id="loc-list" style="border: 1px solid #E2E8F0; border-radius: 6px; padding: 10px; min-height: 80px; max-height: 120px; overflow-y: auto; font-size: 12px; color: #475569; display: flex; flex-direction: column; gap: 5px;">
+             <!-- Renders dynamically -->
+          </div>
+        </div>
+
+        <div>
+          <h4 style="margin: 0 0 10px 0; font-size: 13px; color: #64748B;">2. Cycle Sequence</h4>
+          <div style="display: flex; gap: 5px; margin-bottom: 10px;">
+              <select id="seq-action" style="flex: 1; padding: 5px; border: 1px solid #E2E8F0; border-radius: 4px;">
+                <option value="aspirate">Aspirate</option>
+                <option value="dispense">Dispense</option>
+                <option value="home">Home</option>
+              </select>
+              <select id="seq-loc" style="flex: 1; padding: 5px; border: 1px solid #E2E8F0; border-radius: 4px;"></select>
+              <button class="btn btn-primary" style="padding: 5px 10px;" onclick="addStep()">➕</button>
+          </div>
+          <div id="seq-list" style="border: 1px solid #E2E8F0; border-radius: 6px; padding: 10px; min-height: 100px; max-height: 140px; overflow-y: auto; font-size: 12px; color: #475569; display: flex; flex-direction: column; gap: 5px;">
+             <!-- Renders dynamically -->
+          </div>
+        </div>
+        
+        <div style="display: flex; gap: 10px; margin-top: auto; align-items: center;">
+          <label style="font-size: 12px; font-weight: bold; color: #64748B;">Repeats:</label>
+          <input type="number" id="repeat-count" value="1" min="1" onfocus="this.select()" style="width: 40px; padding: 6px; border: 1px solid #E2E8F0; border-radius: 4px;">
+          <button class="btn btn-print" style="flex: 2; padding: 8px; font-size: 12px;" onclick="runSequence()">🖨️ RUN</button>
+          <button class="btn btn-primary" style="flex: 1; padding: 8px; font-size: 12px; background: #EF4444;" onclick="stopSequence()">🛑 STOP</button>
+        </div>
+        
+        <div id="progress-container" style="display: none; margin-top: 10px; width: 100%;">
+          <div style="display: flex; justify-content: space-between; font-size: 12px; color: #64748B; margin-bottom: 4px;">
+            <span id="progress-text">Cycle 0/0</span>
+            <span id="progress-time" style="font-weight: bold; color: #3B82F6;">Elapsed: 00:00 | Remaining: --:--</span>
+            <span id="progress-status">Running</span>
+          </div>
+          <div style="width: 100%; background-color: #E2E8F0; border-radius: 4px; overflow: hidden; height: 8px;">
+            <div id="progress-bar" style="width: 0%; height: 100%; background-color: #10B981; transition: width 0.3s ease;"></div>
+          </div>
+        </div>
+
+        <hr style="width: 100%; border: 0; border-top: 1px solid #E2E8F0; margin: 5px 0;">
+        <h4 style="margin: 0 0 10px 0; font-size: 13px; color: #64748B;">Save Routine</h4>
+        <div style="display: flex; gap: 10px; align-items: center; width: 100%;">
+          <input type="text" id="routine-name" placeholder="Name (e.g. My Routine)" style="flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+          <button class="btn btn-primary" style="flex: 1;" onclick="saveRoutine()">💾 Save Routine</button>
+        </div>
+      </div>
+      
+      <!-- Array Generator -->
+      <div class="card-panel" style="width: 250px; display: flex; flex-direction: column; gap: 10px;">
+        <h3>▦ Array generator</h3>
+        <p style="font-size:13px; color:#198754; font-weight:600; margin:0 0 8px;">✨ Upgraded to Physical Interpolation!</p>
+        <p style="font-size:12px; color:#555; margin:0;">The old mathematical grid generator was failing due to wrist servo wrapping limits at large array sizes.</p>
+        <p style="font-size:12px; color:#555; margin:0;">Please use the <b>Grid fill</b> or <b>Array generator</b> on the <b>Calibration</b> tab. It perfectly interpolates the physical servo limits to guarantee a safe grid.</p>
+        <p style="font-size:12px; color:#198754; margin:0;"><b>Any targets you generate there will now automatically appear in your Sequence dropdown here!</b></p>
+        
+        <button class="btn btn-primary" style="margin-top: auto; padding: 10px;" onclick="switchTab('cal')">Go to Calibration Page ➔</button>
+      </div>
+    </div> <!-- Close tab-sequence -->
+
+    <!-- Right Column: Workspace Map -->
+    <div id="tab-map" style="display: none; align-items: start; justify-content: flex-start; flex-wrap: wrap; flex-direction: row; gap: 18px;">
+      
+      <!-- Canvas Map Section -->
+      <div class="card-panel" style="width: 390px;">
+        <h3>XY Workspace Map</h3>
+        <canvas id="workspace" width="350" height="350"></canvas>
+        <div style="display: flex; gap: 10px; align-items: center; justify-content: center; margin-top: 15px;">
+          <label style="font-weight: bold;">X: <input type="number" id="manual-x" step="0.05" onfocus="this.select()" onchange="updateTargetFromInput()" style="width: 70px; padding: 4px; border: 1px solid #ccc; border-radius: 4px;"></label>
+          <label style="font-weight: bold;">Y: <input type="number" id="manual-y" step="0.05" onfocus="this.select()" onchange="updateTargetFromInput()" style="width: 70px; padding: 4px; border: 1px solid #ccc; border-radius: 4px;"></label>
+        </div>
+        <div style="text-align: center; margin-top: 5px; font-weight: bold;" id="coords">Target: X=0.0, Y=200.0</div>
+        <div style="text-align: center; margin-top: 5px; color: #10B981; font-weight: bold;" id="actual-coords">Actual: X=0.0, Y=0.0, Z=0</div>
+        <button class="btn btn-accent" onclick="goTarget()" style="margin-top: 10px;">🎯 GO To Target</button>
+      </div>
+
+      <!-- Saved Substrate Map Section -->
+      <div class="card-panel" style="width: 340px;">
+        <h3>Saved Substrate Map</h3>
+        <label style="font-size:12px;">Loaded map:</label>
+        <select id="xy-map-select" onchange="loadMapFromXY()" style="width:100%; padding:8px; margin:6px 0 8px 0;">
+          <option value="">(none)</option>
+        </select>
+        <label style="font-size:12px; display:flex; align-items:center; gap:6px; margin-bottom:8px;">
+          <input type="checkbox" id="flip-xy" onchange="setMapFlip('substrate', this.checked)"> Flip top ↔ bottom</label>
+        <canvas id="xy-cal-canvas" width="320" height="300"
+          style="border:1px solid #ccc; border-radius:6px; width:100%; background:#fafafa; cursor:crosshair;"></canvas>
+        <div id="xy-cal-msg" style="font-size:12px; color:#888; margin-top:6px;">Select a saved map to operate inside it.</div>
+        <p style="font-size:12px; color:#555; margin:8px 0 0;">
+          <b>Click this map to move the arm</b> to that spot on the loaded substrate (uses the
+          calibration, so no "out of reach"). Shift-click adds a target there.
+        </p>
+      </div>
+
+      <!-- Controls Section -->
+      <div class="card-panel" style="width: 350px;">
+        <h3 style="margin: 0 0 15px 0;">Z-Axis Control</h3>
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+            <div style="display: flex; gap: 10px; justify-content: center;">
+              <strong style="width: 50px; text-align: right; margin-top: auto; margin-bottom: auto; padding-right: 5px;">Fast:</strong>
+              <button class="btn btn-primary" style="flex: 1;"
+                      onmousedown="sendCommand('/z_jog/start', {direction: 'up', speed: 'fast'})"
+                      onmouseup="sendCommand('/z_jog/stop')"
+                      onmouseleave="sendCommand('/z_jog/stop')">⬆️ Up</button>
+              <button class="btn btn-primary" style="flex: 1;"
+                      onmousedown="sendCommand('/z_jog/start', {direction: 'down', speed: 'fast'})"
+                      onmouseup="sendCommand('/z_jog/stop')"
+                      onmouseleave="sendCommand('/z_jog/stop')">⬇️ Down</button>
+            </div>
+            <div style="display: flex; gap: 10px; justify-content: center;">
+              <strong style="width: 50px; text-align: right; margin-top: auto; margin-bottom: auto; padding-right: 5px;">Fine:</strong>
+              <button class="btn btn-primary" style="flex: 1;"
+                      onmousedown="sendCommand('/z_jog/start', {direction: 'up', speed: 'fine'})"
+                      onmouseup="sendCommand('/z_jog/stop')"
+                      onmouseleave="sendCommand('/z_jog/stop')">⬆️ Up</button>
+              <button class="btn btn-primary" style="flex: 1;"
+                      onmousedown="sendCommand('/z_jog/start', {direction: 'down', speed: 'fine'})"
+                      onmouseup="sendCommand('/z_jog/stop')"
+                      onmouseleave="sendCommand('/z_jog/stop')">⬇️ Down</button>
+            </div>
+        </div>
+
+        <hr style="width: 100%; border: 0; border-top: 1px solid #E2E8F0; margin: 15px 0;">
+        <h4 style="margin: 0 0 10px 0; font-size: 13px; color: #64748B;">Safe Z Limit Configuration</h4>
+        <div style="font-size: 12px; color: #EF4444; margin-bottom: 8px; font-weight: bold;" id="safe-z-display">Current Limit: 3125 ticks</div>
+        <button class="btn btn-primary" style="width: 100%; background-color: #EF4444;" onclick="setSafeZ()">🔒 Set Safe Z Limit to Current Pos</button>
+
+        <hr style="width: 100%; border: 0; border-top: 1px solid #E2E8F0; margin: 25px 0;">
+        
+        <h3 style="margin: 0 0 15px 0;">Save Current Robot Position</h3>
+        <div style="display: flex; flex-direction: column; gap: 10px; width: 100%;">
+          <input type="text" id="map-loc-name" placeholder="Name (e.g. Ink1)" style="padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;">
+          <div style="display: flex; gap: 10px;">
+            <button class="btn btn-primary" style="flex: 1;" onclick="addMapLocation('INK')">💾 Save as Ink</button>
+            <button class="btn btn-primary" style="flex: 1;" onclick="addMapLocation('WELL')">💾 Save as Well</button>
+          </div>
+        </div>
+      </div>
+      
+    </div> <!-- Close tab-map -->
+
+    <!-- ================= CALIBRATION & DISPENSE TAB ================= -->
+    <div id="tab-cal" style="display: none; flex-direction: column; gap: 20px;">
+
+      <div class="card-panel" style="flex-direction:row; align-items:center; gap:14px; padding:12px 18px; flex-wrap:wrap;">
+        <span style="font-size:13px; font-weight:600; display:flex; align-items:center; gap:6px;">&#128640; Arm speed</span>
+        <input type="range" id="arm-speed" min="20" max="200" value="100" step="10"
+               oninput="document.getElementById('arm-speed-val').innerText=this.value"
+               onchange="setArmSpeed(this.value)" style="flex:1; min-width:160px; max-width:340px;">
+        <span id="arm-speed-val" style="font-size:13px; font-weight:600; color:#047857; width:34px;">100</span>
+        <span style="font-size:11px; color:#94A3B8;">Higher = faster zone mapping &middot; lower = gentler, more precise dispensing</span>
+      </div>
+
+      <div style="display:flex; gap:18px; align-items:flex-start; flex-wrap:wrap; justify-content:flex-start;">
+        <div class="card-panel" style="width: 350px;">
+          <h3>1 &middot; Dispensing wells area</h3>
+          <div class="row-flex" style="gap:8px; margin-bottom:8px;">
+            <button class="btn btn-primary" style="flex:1;" title="Lower the arm to the Safe-Z height, then release shoulder/elbow/wrist so you can hand-move the tip to each corner" onclick="sendCommand('/torque/free_xy', {lower: true})">&#128275; Free X/Y</button>
+            <button class="btn btn-primary" style="flex:1;" onclick="sendCommand('/torque/enable').then(()=>setStatus('Arm holding'))">&#128274; Hold</button>
+          </div>
+          <div class="row-flex" style="gap:8px; margin-bottom:6px; align-items:center;"><span style="font-size:12px; width:42px;">Z down:</span><button class="btn btn-primary" style="flex:1;" title="Fast descent — always stops at this zone's fast-stop height (shown below) and never passes the Safe-Z limit" onmousedown="sendCommand('/z_jog/start',{direction:'down',speed:'fast',area:'substrate'})" onmouseup="sendCommand('/z_jog/stop')" onmouseleave="sendCommand('/z_jog/stop')">&#9660;&#9660; Fast</button><button class="btn btn-primary" style="flex:1;" title="Slow descent — for the final approach to the surface (still capped by the Safe-Z limit)" onmousedown="sendCommand('/z_jog/start',{direction:'down',speed:'fine',area:'substrate'})" onmouseup="sendCommand('/z_jog/stop')" onmouseleave="sendCommand('/z_jog/stop')">&#9660; Slow</button></div>
+          <div class="row-flex" style="gap:8px; margin-bottom:6px; align-items:center;"><span style="font-size:12px; width:42px;">Z up:</span><button class="btn btn-primary" style="flex:1;" title="Fast ascent — for quickly clearing the deck after capturing a height" onmousedown="sendCommand('/z_jog/start',{direction:'up',speed:'fast',area:'substrate'})" onmouseup="sendCommand('/z_jog/stop')" onmouseleave="sendCommand('/z_jog/stop')">&#9650;&#9650; Fast</button><button class="btn btn-primary" style="flex:1;" title="Slow ascent — fine height adjustment" onmousedown="sendCommand('/z_jog/start',{direction:'up',speed:'fine',area:'substrate'})" onmouseup="sendCommand('/z_jog/stop')" onmouseleave="sendCommand('/z_jog/stop')">&#9650; Slow</button></div>
+          <div class="row-flex" style="gap:8px; margin-bottom:10px; align-items:center;"><span style="font-size:12px; color:#64748B; flex:1;">Fast-stop height: <b id="substrate-floor">&hellip;</b></span><button class="btn btn-primary" style="padding:4px 8px; font-size:11px;" title="Jog Z so the tip sits just ABOVE the tallest labware in this zone, then click: fast descent (and map-click approaches) will stop at this height" onclick="setAreaFloor('substrate')">&#11015; Set to current Z</button></div>
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+            <span style="font-size:12px; font-weight:600;">Teach the 4 corners:</span>
+            <button class="btn btn-danger" style="padding:3px 9px; font-size:11px;" title="Reset all 4 corners so you can re-map this area" onclick="resetCorners('substrate')">&#8634; Reset all</button>
+          </div>
+          <div id="substrate-corner-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:8px;"></div>
+          <div class="row-flex" style="gap:6px; align-items:center; margin-top:8px;">
+            <span style="font-size:11px; color:#475569;" title="Which corner of the rectangle the tip is currently sitting at. The other 3 are derived from it — pick the corner you actually jogged to so the rectangle extends toward your labware and stays within the arm's reach.">Tip is at corner</span>
+            <select id="substrate-rect-corner" style="flex:1; padding:6px; font-size:12px;">
+              <option value="TL">Top-left (far · robot's left)</option>
+              <option value="TR">Top-right (far · robot's right)</option>
+              <option value="BL">Bottom-left (near · robot's left)</option>
+              <option value="BR">Bottom-right (near · robot's right)</option>
+            </select>
+          </div>
+          <label style="font-size:11px; color:#475569; display:flex; align-items:center; gap:6px; margin-top:6px;" title="ON: after computing the rectangle, the arm drives to each corner so you can watch/verify it. OFF: the corners are just computed and saved without any arm motion (same as manual teaching) — use this if the visit stalls/overloads at full extension."><input type="checkbox" id="substrate-rect-visit" checked> Visit corners to verify (arm moves)</label>
+          <button class="btn btn-primary" style="width:100%; margin-top:6px;" title="Jog the tip to ONE corner of the zone, choose which corner it is above, fill in Plate size (mm), then click: the robot derives the other 3 corners, visits each at safe height to verify, and saves a true rectangle. Warns if it overlaps the inks area." onclick="teachRect('substrate')">&#9645; Auto-map rectangle from current corner</button>
+          <button class="btn btn-primary" style="width:100%; margin-top:6px;" title="TILT-SAFE: for a plate that is NOT square to the robot. Teach TWO adjacent corners (e.g. TL then TR) with the corner buttons above, enter Plate size, then click — the robot measures the real edge angle between them and builds the rectangle along it, so a rotated plate maps correctly." onclick="completeRect('substrate')">&#9727; Complete rectangle from 2 taught corners (tilt-safe)</button>
+          <label style="font-size:12px; display:flex; align-items:center; gap:6px; margin:8px 0 6px;"><input type="checkbox" onchange="setMapFlip('substrate', this.checked)"> Flip top &#8596; bottom</label>
+          <canvas id="substrate-canvas" width="350" height="240" style="border:1px solid #ccc; border-radius:6px; width:100%; background:#fafafa; cursor:crosshair;"></canvas>
+          <div id="substrate-canvas-msg" style="font-size:12px; color:#888; margin-top:6px;">Corners not taught yet &mdash; Free X/Y, Z jog &amp; height capture work anytime; teach corners whenever ready.</div>
+          <div class="row-flex" style="gap:6px; align-items:center; margin-top:8px;">
+            <span id="substrate-ref-info" style="font-size:12px; color:#555; flex:1;">Origin: not set</span>
+            <button class="btn btn-primary" onclick="pickReference('substrate')">&#128205; Pick</button>
+            <button class="btn btn-accent" onclick="goToReference('substrate')">&#9654; Go</button>
+            <button class="btn btn-primary" title="Manually position the tip at the working depth (Free X/Y + Z jog), then click: the current Z becomes this zone's dispense height AND the Z for newly generated wells" onclick="captureArrayZ('substrate')">&#11015; Capture Z</button>
+          </div>
+          <div id="substrate-z-info" style="font-size:11px; color:#888; margin:4px 0 8px;">Array Z: uses height</div>
+          <div class="row-flex" style="gap:8px; align-items:center; margin-bottom:6px;">
+            <span style="font-size:11px; color:#475569;" title="Only used by 'Auto-map rectangle' to build the rectangle from one corner. Array spacing below is in real mm and is auto-scaled from the taught corners — you don't need to set this for arrays.">Plate size for Auto-map (mm)</span>
+            <input type="number" id="substrate-w-mm" placeholder="width" step="0.5" min="1" style="width:62px; padding:6px;">
+            <span style="font-size:11px; color:#94A3B8;">&times;</span>
+            <input type="number" id="substrate-h-mm" placeholder="height" step="0.5" min="1" style="width:62px; padding:6px;">
+          </div>
+          <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px; align-items:end;">
+            <label style="font-size:11px; color:#475569; display:flex; flex-direction:column; gap:3px;">&#916;x mm <input type="number" id="substrate-dx" value="9" step="0.5" style="width:100%; padding:6px; box-sizing:border-box;"></label>
+            <label style="font-size:11px; color:#475569; display:flex; flex-direction:column; gap:3px;">&#916;y mm <input type="number" id="substrate-dy" value="9" step="0.5" style="width:100%; padding:6px; box-sizing:border-box;"></label>
+            <label style="font-size:11px; color:#475569; display:flex; flex-direction:column; gap:3px;">Cols <input type="number" id="substrate-nx" value="3" min="1" style="width:100%; padding:6px; box-sizing:border-box;"></label>
+            <label style="font-size:11px; color:#475569; display:flex; flex-direction:column; gap:3px;">Rows <input type="number" id="substrate-ny" value="3" min="1" style="width:100%; padding:6px; box-sizing:border-box;"></label>
+          </div>
+          <div id="substrate-array-scale" style="font-size:11px; color:#94A3B8; margin-top:6px;">Δx/Δy are real mm; spacing is auto-scaled from the taught area.</div>
+          <label style="font-size:12px; display:flex; align-items:center; gap:4px; margin-top:8px;"><input type="checkbox" id="substrate-replace" checked> Replace existing</label>
+          <button class="btn btn-accent" style="width:100%; margin-top:8px;" onclick="generateArray('substrate')">&#9638; Generate wells</button>
+          <div class="row-flex" style="gap:8px; align-items:center; margin-top:8px;">
+            <span id="substrate-count" style="font-size:12px; color:#555; flex:1;">0 wells</span>
+            <button class="btn btn-danger" onclick="clearTargets('substrate')">&#128465; Clear</button>
+          </div>
+
+        </div>
+        <div class="card-panel" style="width: 350px;">
+          <h3>2 &middot; Inks area</h3>
+          <div class="row-flex" style="gap:8px; margin-bottom:8px;">
+            <button class="btn btn-primary" style="flex:1;" title="Lower the arm to the Safe-Z height, then release shoulder/elbow/wrist so you can hand-move the tip to each corner" onclick="sendCommand('/torque/free_xy', {lower: true})">&#128275; Free X/Y</button>
+            <button class="btn btn-primary" style="flex:1;" onclick="sendCommand('/torque/enable').then(()=>setStatus('Arm holding'))">&#128274; Hold</button>
+          </div>
+          <div class="row-flex" style="gap:8px; margin-bottom:6px; align-items:center;"><span style="font-size:12px; width:42px;">Z down:</span><button class="btn btn-primary" style="flex:1;" title="Fast descent — always stops at this zone's fast-stop height (shown below) and never passes the Safe-Z limit" onmousedown="sendCommand('/z_jog/start',{direction:'down',speed:'fast',area:'reagent'})" onmouseup="sendCommand('/z_jog/stop')" onmouseleave="sendCommand('/z_jog/stop')">&#9660;&#9660; Fast</button><button class="btn btn-primary" style="flex:1;" title="Slow descent — for the final approach to the ink (still capped by the Safe-Z limit)" onmousedown="sendCommand('/z_jog/start',{direction:'down',speed:'fine',area:'reagent'})" onmouseup="sendCommand('/z_jog/stop')" onmouseleave="sendCommand('/z_jog/stop')">&#9660; Slow</button></div>
+          <div class="row-flex" style="gap:8px; margin-bottom:6px; align-items:center;"><span style="font-size:12px; width:42px;">Z up:</span><button class="btn btn-primary" style="flex:1;" title="Fast ascent — for quickly clearing the ink vials after capturing a height" onmousedown="sendCommand('/z_jog/start',{direction:'up',speed:'fast',area:'reagent'})" onmouseup="sendCommand('/z_jog/stop')" onmouseleave="sendCommand('/z_jog/stop')">&#9650;&#9650; Fast</button><button class="btn btn-primary" style="flex:1;" title="Slow ascent — fine height adjustment" onmousedown="sendCommand('/z_jog/start',{direction:'up',speed:'fine',area:'reagent'})" onmouseup="sendCommand('/z_jog/stop')" onmouseleave="sendCommand('/z_jog/stop')">&#9650; Slow</button></div>
+          <div class="row-flex" style="gap:8px; margin-bottom:10px; align-items:center;"><span style="font-size:12px; color:#64748B; flex:1;">Fast-stop height: <b id="reagent-floor">&hellip;</b></span><button class="btn btn-primary" style="padding:4px 8px; font-size:11px;" title="Jog Z so the tip sits just ABOVE the tallest vial in this zone, then click: fast descent (and map-click approaches) will stop at this height" onclick="setAreaFloor('reagent')">&#11015; Set to current Z</button></div>
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+            <span style="font-size:12px; font-weight:600;">Teach the 4 corners:</span>
+            <button class="btn btn-danger" style="padding:3px 9px; font-size:11px;" title="Reset all 4 corners so you can re-map this area" onclick="resetCorners('reagent')">&#8634; Reset all</button>
+          </div>
+          <div id="reagent-corner-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:8px;"></div>
+          <div class="row-flex" style="gap:6px; align-items:center; margin-top:8px;">
+            <span style="font-size:11px; color:#475569;" title="Which corner of the rectangle the tip is currently sitting at. The other 3 are derived from it — pick the corner you actually jogged to so the rectangle extends toward your labware and stays within the arm's reach.">Tip is at corner</span>
+            <select id="reagent-rect-corner" style="flex:1; padding:6px; font-size:12px;">
+              <option value="TL">Top-left (far · robot's left)</option>
+              <option value="TR">Top-right (far · robot's right)</option>
+              <option value="BL">Bottom-left (near · robot's left)</option>
+              <option value="BR">Bottom-right (near · robot's right)</option>
+            </select>
+          </div>
+          <label style="font-size:11px; color:#475569; display:flex; align-items:center; gap:6px; margin-top:6px;" title="ON: after computing the rectangle, the arm drives to each corner so you can watch/verify it. OFF: the corners are just computed and saved without any arm motion (same as manual teaching) — use this if the visit stalls/overloads at full extension."><input type="checkbox" id="reagent-rect-visit" checked> Visit corners to verify (arm moves)</label>
+          <button class="btn btn-primary" style="width:100%; margin-top:6px;" title="Jog the tip to ONE corner of the zone, choose which corner it is above, fill in Plate size (mm), then click: the robot derives the other 3 corners, visits each at safe height to verify, and saves a true rectangle. Warns if it overlaps the dispensing area." onclick="teachRect('reagent')">&#9645; Auto-map rectangle from current corner</button>
+          <button class="btn btn-primary" style="width:100%; margin-top:6px;" title="TILT-SAFE: for a plate that is NOT square to the robot. Teach TWO adjacent corners (e.g. TL then TR) with the corner buttons above, enter Plate size, then click — the robot measures the real edge angle between them and builds the rectangle along it, so a rotated plate maps correctly." onclick="completeRect('reagent')">&#9727; Complete rectangle from 2 taught corners (tilt-safe)</button>
+          <label style="font-size:12px; display:flex; align-items:center; gap:6px; margin:8px 0 6px;"><input type="checkbox" onchange="setMapFlip('reagent', this.checked)"> Flip top &#8596; bottom</label>
+          <canvas id="reagent-canvas" width="350" height="240" style="border:1px solid #ccc; border-radius:6px; width:100%; background:#fafafa; cursor:crosshair;"></canvas>
+          <div id="reagent-canvas-msg" style="font-size:12px; color:#888; margin-top:6px;">Corners not taught yet &mdash; Free X/Y, Z jog &amp; height capture work anytime; teach corners whenever ready.</div>
+          <div class="row-flex" style="gap:6px; align-items:center; margin-top:8px;">
+            <span id="reagent-ref-info" style="font-size:12px; color:#555; flex:1;">Origin: not set</span>
+            <button class="btn btn-primary" onclick="pickReference('reagent')">&#128205; Pick</button>
+            <button class="btn btn-accent" onclick="goToReference('reagent')">&#9654; Go</button>
+            <button class="btn btn-primary" title="Manually position the tip at the working depth (Free X/Y + Z jog), then click: the current Z becomes this zone's aspirate height AND the Z for newly generated inks" onclick="captureArrayZ('reagent')">&#11015; Capture Z</button>
+          </div>
+          <div id="reagent-z-info" style="font-size:11px; color:#888; margin:4px 0 8px;">Array Z: uses height</div>
+          <div class="row-flex" style="gap:8px; align-items:center; margin-bottom:6px;">
+            <span style="font-size:11px; color:#475569;" title="Only used by 'Auto-map rectangle' to build the rectangle from one corner. Array spacing below is in real mm and is auto-scaled from the taught corners — you don't need to set this for arrays.">Plate size for Auto-map (mm)</span>
+            <input type="number" id="reagent-w-mm" placeholder="width" step="0.5" min="1" style="width:62px; padding:6px;">
+            <span style="font-size:11px; color:#94A3B8;">&times;</span>
+            <input type="number" id="reagent-h-mm" placeholder="height" step="0.5" min="1" style="width:62px; padding:6px;">
+          </div>
+          <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px; align-items:end;">
+            <label style="font-size:11px; color:#475569; display:flex; flex-direction:column; gap:3px;">&#916;x mm <input type="number" id="reagent-dx" value="9" step="0.5" style="width:100%; padding:6px; box-sizing:border-box;"></label>
+            <label style="font-size:11px; color:#475569; display:flex; flex-direction:column; gap:3px;">&#916;y mm <input type="number" id="reagent-dy" value="9" step="0.5" style="width:100%; padding:6px; box-sizing:border-box;"></label>
+            <label style="font-size:11px; color:#475569; display:flex; flex-direction:column; gap:3px;">Cols <input type="number" id="reagent-nx" value="1" min="1" style="width:100%; padding:6px; box-sizing:border-box;"></label>
+            <label style="font-size:11px; color:#475569; display:flex; flex-direction:column; gap:3px;">Rows <input type="number" id="reagent-ny" value="1" min="1" style="width:100%; padding:6px; box-sizing:border-box;"></label>
+          </div>
+          <label style="font-size:12px; display:flex; align-items:center; gap:4px; margin-top:8px;"><input type="checkbox" id="reagent-replace" checked> Replace existing</label>
+          <button class="btn btn-accent" style="width:100%; margin-top:8px;" onclick="generateArray('reagent')">&#9638; Generate inks</button>
+          <div class="row-flex" style="gap:8px; align-items:center; margin-top:8px;">
+            <span id="reagent-count" style="font-size:12px; color:#555; flex:1;">0 inks</span>
+            <button class="btn btn-danger" onclick="clearTargets('reagent')">&#128465; Clear</button>
+          </div>
+
+        </div>
+      </div>
+
+    </div> <!-- Close tab-cal -->
+
+    <!-- ================= PRINT TAB ================= -->
+    <div id="tab-print" class="page" style="display:none; flex-direction:column; gap:18px;">
+      <p style="font-size:13px; color:#64748B; margin:0; max-width:900px;">Run the dispensing routine across the calibrated wells &mdash; for every well it runs <b>aspirate ink &#8594; dispense well</b>. Teach the wells &amp; inks areas first on the <b>Calibrate</b> page.</p>
+      <div style="display:flex; gap:18px; align-items:flex-start; flex-wrap:wrap; justify-content:flex-start;">
+        <div class="card-panel" style="width: 340px;">
+          <h3>&#9881; Program the run</h3>
+          <label style="font-size:12px;">Ink source:</label>
+          <select id="dispense-ink" style="width:100%; padding:8px; margin:6px 0;"></select>
+          <label style="font-size:12px; display:flex; align-items:center; gap:6px; margin:6px 0;" title="ON: the arm returns to the home position after every aspirate→dispense cycle — safer and avoids dripping across the deck, but much slower. OFF: the arm shuttles directly ink→well→ink without homing — best for fast multi-point prints like a logo."><input type="checkbox" id="dispense-home" checked> Return home after each dispense</label>
+          <div style="font-size:11px; color:#94A3B8; margin:-2px 0 6px 22px;">Uncheck for fast multi-point prints (e.g. a logo); leave on to avoid drips between points.</div>
+          <label style="font-size:12px;">Repeat run: <input type="number" id="dispense-repeat" value="1" min="1" style="width:55px; padding:6px;"></label>
+          <label style="font-size:12px; display:block; margin-top:6px;" title="How long the tip stays at the well after the plunger press has fully completed, before lifting — give the drop time to fully detach. The plunger is only released once the arm is back up.">Drop settle (s): <input type="number" id="dispense-dwell" value="1.5" min="0.2" max="10" step="0.1" style="width:55px; padding:6px;"></label>
+          <hr style="border:0; border-top:1px solid #E2E8F0; margin:14px 0;">
+          <button class="btn btn-accent" style="width:100%;" onclick="buildAndRunDispense()">&#9654; Build &amp; Run print</button>
+          <button class="btn btn-danger" style="width:100%; margin-top:6px;" onclick="sendCommand('/stop_sequence')">&#9632; Stop</button>
+          <div id="dispense-status" style="font-size:12px; margin-top:8px; color:#198754;"></div>
+        </div>
+        <div class="card-panel" style="width: 340px;">
+          <h3>&#9654; Test run (dry check)</h3>
+          <p style="font-size:12px; color:#555; margin:0 0 8px;">Visits every well and flags any that land outside tolerance &mdash; without dispensing.</p>
+          <label style="font-size:12px;">Test tolerance (ticks): <input type="number" id="test-tol" value="8" min="1" max="50" style="width:55px; padding:6px;"></label>
+          <div class="row-flex" style="gap:8px; margin-top:8px;">
+            <button class="btn btn-accent" style="flex:1;" onclick="startTestRun()">&#9654; Test Run (wells)</button>
+            <button class="btn btn-danger" onclick="sendCommand('/test_run/stop')">&#9632;</button>
+          </div>
+          <div id="test-run-status" style="font-size:12px; margin-top:8px;"></div>
+          <div id="test-run-results" style="font-size:12px; margin-top:6px; max-height:220px; overflow:auto;"></div>
+        </div>
+      </div>
+    </div> <!-- Close tab-print -->
+
+    <!-- ================= ADVANCED TOOLS TAB ================= -->
+    <div id="tab-tools" class="page" style="display:none; flex-direction:column; gap:20px;">
+      <p style="font-size:13px; color:#64748B; margin:0; max-width:1000px;">Optional precision aids &mdash; arm-camera corner refinement, automatic grid generation, repeatability testing, and the saved-location / map library. These act on the area selected below.</p>
+      <div style="display:flex; gap:20px; align-items:flex-start; flex-wrap:wrap;">
+          <div class="card-panel" style="width: 320px;">
+            <h3>&#128208; Workspace calibration</h3>
+            <p style="font-size:12px; color:#555; margin:0 0 10px;">Map a mathematical rectangle onto the physical table by teaching its four corners. Opens a guided step-by-step dialog.</p>
+            <button class="btn btn-accent" style="width:100%;" onclick="startCalibration()">&#128208; Calibrate Workspace</button>
+          </div>
+          <div class="card-panel" style="width: 320px;">
+            <h3>&#129658; Arm joint diagnostics</h3>
+            <p style="font-size:12px; color:#555; margin:0 0 8px;">If a joint (e.g. the shoulder, nearest the base) only moves one way, read its state. <b>Torque ON</b> means it springs back &mdash; use <b>Limp arm</b> to release it; <b>off</b> points to a mechanical/wiring limit.</p>
+            <div class="row-flex" style="gap:8px;">
+              <button class="btn btn-primary" style="flex:1;" onclick="diagnoseServos()">&#128260; Read joints</button>
+              <button class="btn btn-primary" style="flex:1;" title="Release shoulder/elbow/wrist at the CURRENT height (no lowering) so you can hand-move a stuck joint back" onclick="sendCommand('/torque/free_xy')">&#128275; Limp arm</button>
+            </div>
+            <button class="btn btn-primary" style="margin-top:8px;" onclick="sendCommand('/home')">&#127968; Re-home arm</button>
+            <div id="servo-diag" style="font-size:12px; margin-top:8px; overflow:auto;"></div>
+          </div>
+          <div class="card-panel" style="width: 320px;">
+            <h3>&#128247; Camera refine (arm camera)</h3>
+            <label style="font-weight:600; font-size:12px;">Acts on area:</label>
+            <select id="cal-area" onchange="renderCalState()" style="width:100%; padding:8px; margin:6px 0 10px;">
+              <option value="substrate">Dispensing wells (substrate)</option>
+              <option value="reagent">Inks (reagent)</option>
+            </select>
+            <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:8px; margin-bottom:10px;">
+              <div style="font-size:12px; font-weight:600; margin-bottom:6px;">Pick the arm camera</div>
+              <div class="row-flex" style="gap:6px; align-items:center;">
+                <label style="font-size:12px;">Index <input type="number" id="cam-index" value="2" min="0" max="9" style="width:50px; padding:6px;"></label>
+                <button class="btn btn-primary" onclick="snapshotCamera()">&#128248; Snapshot</button>
+                <button class="btn btn-accent" onclick="useArmCamera()">&#10003; Use this</button>
+              </div>
+              <img id="cam-preview" style="display:none; width:100%; margin-top:6px; border-radius:4px; border:1px solid #ccc;">
+              <div id="cam-pick-status" style="font-size:12px; margin-top:4px;"></div>
+            </div>
+            <div class="row-flex" style="gap:8px; align-items:center;">
+              <select id="cam-corner" style="flex:1; padding:8px;"><option value="TL">Top-Left</option><option value="TR">Top-Right</option><option value="BL">Bottom-Left</option><option value="BR">Bottom-Right</option></select>
+              <button class="btn btn-accent" onclick="refineCornerCam()">&#128247; Refine</button>
+            </div>
+            <div class="row-flex" style="gap:8px; margin-top:8px;">
+              <button class="btn btn-primary" style="flex:1;" onclick="cameraCenterTest()">&#127919; Centre only</button>
+              <button class="btn btn-danger" onclick="sendCommand('/vision/stop')">&#9632; Stop</button>
+            </div>
+            <div id="cam-status" style="font-size:12px; margin-top:6px; color:#198754;"></div>
+            <hr style="border:0; border-top:1px solid #E2E8F0; margin:14px 0;">
+            <button class="btn btn-danger" style="width:100%;" onclick="clearArea()">&#128465; Clear this area's corners</button>
+          </div>
+          <div class="card-panel" style="width: 320px;">
+            <h3>Grid fill (rows &times; cols)</h3>
+            <p style="font-size:12px; color:#555; margin:0 0 8px;">Even grid across the area selected on the left.</p>
+            <div class="row-flex" style="gap:8px; align-items:center; flex-wrap:wrap;">
+              <label style="font-size:12px;">Rows <input type="number" id="grid-rows" value="3" min="1" style="width:55px; padding:6px;"></label>
+              <label style="font-size:12px;">Cols <input type="number" id="grid-cols" value="3" min="1" style="width:55px; padding:6px;"></label>
+              <label style="font-size:12px;">Margin <input type="number" id="grid-margin" value="0.1" step="0.05" min="0" max="0.4" style="width:60px; padding:6px;"></label>
+            </div>
+            <label style="font-size:12px; display:flex; align-items:center; gap:4px; margin-top:8px;"><input type="checkbox" id="grid-replace" checked> Replace existing</label>
+            <button class="btn btn-primary" style="width:100%; margin-top:8px;" onclick="generateGridTargets()">&#9638; Generate Grid</button>
+            <hr style="border:0; border-top:1px solid #E2E8F0; margin:14px 0;">
+            <h3>Repeatability check</h3>
+            <div class="row-flex" style="gap:8px; align-items:center;">
+              <label style="font-size:12px;">u <input type="number" id="rep-u" value="0.5" step="0.1" min="0" max="1" style="width:55px; padding:6px;"></label>
+              <label style="font-size:12px;">v <input type="number" id="rep-v" value="0.5" step="0.1" min="0" max="1" style="width:55px; padding:6px;"></label>
+              <label style="font-size:12px;">Cycles <input type="number" id="rep-cycles" value="10" min="2" max="50" style="width:55px; padding:6px;"></label>
+            </div>
+            <button class="btn btn-accent" style="width:100%; margin-top:8px;" onclick="runRepeatability()">&#127919; Run Repeatability</button>
+            <div id="rep-result" style="font-size:12px; margin-top:8px; white-space:pre-wrap;"></div>
+          </div>
+          <div class="card-panel" style="width: 320px;">
+            <h3>Save single ink / well</h3>
+            <p style="font-size:12px; color:#555; margin:0 0 8px;">Jog to a point, then save its current position.</p>
+            <input type="text" id="loc-name" placeholder="Name" style="width:100%; padding:9px; box-sizing:border-box; margin-bottom:8px;">
+            <div class="row-flex" style="gap:8px;">
+              <button class="btn btn-primary" style="flex:1;" onclick="saveLoc('inks')">&#128167; Save Ink</button>
+              <button class="btn btn-primary" style="flex:1;" onclick="saveLoc('wells')">&#129514; Save Well</button>
+            </div>
+            <div id="loc-lists" style="font-size:13px; margin-top:8px;"></div>
+            <hr style="border:0; border-top:1px solid #E2E8F0; margin:14px 0;">
+            <h3>Map library</h3>
+            <div class="row-flex" style="gap:8px;">
+              <input type="text" id="map-name" placeholder="Map name" style="flex:1; padding:9px; box-sizing:border-box;">
+              <button class="btn btn-primary" onclick="saveMap()">&#128190; Save</button>
+            </div>
+            <div id="map-library" style="font-size:13px; margin-top:8px;"></div>
+          </div>
+      </div>
+    </div> <!-- Close tab-tools -->
+
+      </div><!-- /.pages -->
+    </main>
+   </div><!-- /.app-shell -->
+  </div><!-- /#main-view -->
 
   <script>
+    const SERVER = 'http://localhost:5000';
     let targetX = 0;
     let targetY = 200;
-    const SERVER = 'http://localhost:5000';
+
+    function setSafeZ() {
+      if (confirm("WARNING: Are you sure you want to set the current Z height as the absolute safe Z limit? The robot will not be able to plunge below this exact height. Ensure the tip is NOT colliding before accepting.")) {
+          sendCommand('/set_safe_z').then(() => {
+              fetchSafeZ();
+          });
+      }
+    }
+
+    function fetchSafeZ() {
+      fetch(SERVER + '/get_safe_z')
+        .then(res => res.json())
+        .then(data => {
+            document.getElementById('safe-z-display').innerText = `Current Limit: ${data.safe_z_limit} ticks`;
+        })
+        .catch(err => console.error(err));
+    }
+
+    // Call on startup
+    fetchSafeZ();
+    const PAGES = {
+      dashboard: { el: 'tab-dashboard', disp: 'flex', title: 'Connect &amp; Hardware' },
+      cal:       { el: 'tab-cal',       disp: 'flex', title: 'Calibrate Areas' },
+      print:     { el: 'tab-print',     disp: 'flex', title: 'Run Print' },
+      map:       { el: 'tab-map',       disp: 'flex', title: 'Workspace Map' },
+      sequence:  { el: 'tab-sequence',  disp: 'flex', title: 'Build Sequence' },
+      tools:     { el: 'tab-tools',     disp: 'flex', title: 'Advanced Tools' },
+    };
+    function switchTab(tab) {
+      if (!PAGES[tab]) return;
+      Object.keys(PAGES).forEach(k => {
+        const page = document.getElementById(PAGES[k].el);
+        if (page) page.style.display = (k === tab) ? PAGES[k].disp : 'none';
+        const nav = document.getElementById('nav-' + k);
+        if (nav) nav.className = (k === tab) ? 'nav-btn active' : 'nav-btn';
+      });
+      const titleEl = document.getElementById('page-title');
+      if (titleEl) titleEl.innerHTML = PAGES[tab].title;
+      // Refresh server-backed state for any page that reads calibration/locations.
+      if (tab === 'cal' || tab === 'print' || tab === 'map' || tab === 'tools') refreshCalibration();
+    }
     
     function setStatus(msg, isError=false) {
       const el = document.getElementById('status-msg');
@@ -137,34 +864,232 @@
       sendCommand('/init');
     }
 
+    // Emergency Stop: instantly halt every motion source, then cut servo torque.
+    // Fires all stop endpoints in parallel so one failure can't block the others.
+    // No confirmation dialog — an e-stop must act immediately. NOTE: disabling
+    // torque de-energizes the arm, so it may sag/drop under gravity.
+    async function emergencyShutdown() {
+      setStatus('⛔ EMERGENCY STOP — halting…', true);
+      const stops = ['/stop_sequence', '/test_run/stop', '/z_jog/stop',
+                     '/thumb_jog/stop', '/grab_cal/approach_jog/stop',
+                     '/vision/stop', '/torque/disable'];
+      await Promise.allSettled(stops.map(ep =>
+        fetch(SERVER + ep, { method: 'POST', headers: { 'Content-Type': 'application/json' } })));
+      setStatus('⛔ Emergency stop: motion halted & motors disabled', true);
+    }
+
     function goTarget() {
+      // The GO button uses the legacy kinematics, which can disagree with a taught
+      // substrate map ("out of reach" at taught poses). Warn but never BLOCK -
+      // the user keeps full freedom to drive the arm anywhere, calibrated or not.
+      if (calState && calState.ready && calState.ready.substrate) {
+        if (!confirm('Note: a calibrated substrate map is active. GO uses the older ' +
+              'kinematics, which may not match the taught poses exactly (or report ' +
+              '"out of reach").\n\nMove anyway?')) return;
+      }
       // Python's backend expects robot X and Y (where X is forward, Y is left/right)
       // the canvas X is left/right, canvas Y is forward
       sendCommand('/go', { x: targetY, y: -targetX });
     }
 
+    function grabPipette() {
+      const slot = document.getElementById('pipette-slot').value;
+      sendCommand('/grab_pipette', { slot: parseInt(slot) });
+    }
+
+    function testPlunge(endpoint) {
+      const hold = parseFloat(document.getElementById('plunge-hold').value);
+      sendCommand(endpoint, { hold_s: isNaN(hold) ? 2.0 : hold, slot: grabCalSlot() });
+    }
+
+    // Saved aspirate/dispense thumb positions, read back FROM DISK via the server
+    // so the panel proves what actually persisted.
+    let thumbLimits = { aspirate: {}, dispense: {} };
+
+    function updateThumbSaveStatus() {
+      const el = document.getElementById('thumb-save-status');
+      if (!el) return;
+      const slot = String(grabCalSlot());
+      const asp = thumbLimits.aspirate[slot];
+      const disp = thumbLimits.dispense[slot];
+      el.innerText = `Slot ${slot} saved on disk — aspirate: ${asp !== undefined ? asp : 'not set'}, ` +
+                     `dispense: ${disp !== undefined ? disp : 'not set'}`;
+    }
+
+    async function refreshThumbLimits() {
+      try {
+        const res = await fetch(SERVER + '/thumb_limits/get');
+        const data = await res.json();
+        thumbLimits = { aspirate: data.aspirate || {}, dispense: data.dispense || {} };
+      } catch (err) {
+        thumbLimits = { aspirate: {}, dispense: {} };
+      }
+      updateThumbSaveStatus();
+    }
+    refreshThumbLimits();
+
+    async function saveThumbPos(endpoint) {
+      await sendCommand(endpoint, { slot: grabCalSlot() });
+      refreshThumbLimits();
+    }
+
+    // Per-zone fast-descent stop heights ("travel Z") shown in the wells/inks cards
+    async function refreshAreaFloors() {
+      try {
+        const res = await fetch(SERVER + '/area_travel_z/get');
+        const data = await res.json();
+        const s = document.getElementById('substrate-floor');
+        if (s && data.substrate !== undefined) s.innerText = data.substrate + ' ticks';
+        const r = document.getElementById('reagent-floor');
+        if (r && data.reagent !== undefined) r.innerText = data.reagent + ' ticks';
+      } catch (err) { /* server not up yet - the placeholder stays */ }
+    }
+    refreshAreaFloors();
+
+    async function setAreaFloor(area) {
+      await sendCommand('/area_travel_z/set', { area: area });
+      refreshAreaFloors();
+    }
+
+    // --- Grab Calibration (per-slot taught grab pose, overrides factory XML) ---
+    let grabOverrides = {};
+
+    function grabCalSlot() {
+      return parseInt(document.getElementById('pipette-slot').value);
+    }
+
+    function grabCalTeach() {
+      sendCommand('/grab_cal/teach', { slot: grabCalSlot() });
+    }
+
+    function grabCalGoto() {
+      sendCommand('/grab_cal/goto', { slot: grabCalSlot() });
+    }
+
+    function grabCalApproachJog(direction) {
+      sendCommand('/grab_cal/approach_jog/start', { direction: direction, slot: grabCalSlot() });
+    }
+
+    async function grabCalSave() {
+      await sendCommand('/grab_cal/save', { slot: grabCalSlot() });
+      refreshGrabCal();
+    }
+
+    function grabCalRetract() {
+      sendCommand('/grab_cal/retract', { slot: grabCalSlot() });
+    }
+
+    async function grabCalClear() {
+      await sendCommand('/grab_cal/clear', { slot: grabCalSlot() });
+      refreshGrabCal();
+    }
+
+    function updateGrabCalStatus() {
+      const el = document.getElementById('grab-cal-status');
+      if (!el) return;
+      const slot = grabCalSlot();
+      const ov = grabOverrides[String(slot)];
+      const taught = Object.keys(grabOverrides);
+      let msg = ov
+        ? `Slot ${slot}: TAUGHT pose active (S/E/W ${ov.grab.join('/')} @ Z ${ov.z}).`
+        : `Slot ${slot}: factory pose active.`;
+      if (taught.length) msg += ` Taught slots: ${taught.join(', ')}.`;
+      el.innerText = msg;
+      // The slot dropdown's onchange lands here - keep the saved aspirate/dispense
+      // readout in sync with the selected slot too.
+      if (typeof updateThumbSaveStatus === 'function') updateThumbSaveStatus();
+    }
+
+    async function refreshGrabCal() {
+      try {
+        const res = await fetch(SERVER + '/grab_cal/get');
+        const data = await res.json();
+        grabOverrides = data.overrides || {};
+      } catch (err) {
+        grabOverrides = {};
+      }
+      updateGrabCalStatus();
+    }
+    refreshGrabCal();
+
     // Canvas drawing
     const canvas = document.getElementById('workspace');
     const ctx = canvas.getContext('2d');
-    const scale = 180.0 / 350.0;
-    const cx = 200, cy = 200;
+    const CANVAS_WIDTH = 400; // X spans -200 to 200 mm
+    const CANVAS_HEIGHT = 400; // Y spans 0 to 400 mm
+    const scale = 1.0;
+    const cx = 200, cy = 400;
+    let actualX = null;
+    let actualY = null;
+    let pollInterval = null;
     
     function drawWorkspace() {
-      ctx.clearRect(0,0,400,400);
+      ctx.clearRect(0,0,CANVAS_WIDTH,CANVAS_HEIGHT);
       ctx.strokeStyle = '#f0f0f0';
-      for(let i=0; i<=400; i+=50) {
-        ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,400); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(400,i); ctx.stroke();
+      for(let i=0; i<=CANVAS_WIDTH; i+=50) {
+        ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,CANVAS_HEIGHT); ctx.stroke();
+      }
+      for(let i=0; i<=CANVAS_HEIGHT; i+=50) {
+        ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(CANVAS_WIDTH,i); ctx.stroke();
       }
       ctx.strokeStyle = '#aaa';
-      ctx.beginPath(); ctx.moveTo(cx,0); ctx.lineTo(cx,400); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(0,cy); ctx.lineTo(400,cy); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx,0); ctx.lineTo(cx,CANVAS_HEIGHT); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0,cy); ctx.lineTo(CANVAS_WIDTH,cy); ctx.stroke();
       
-      // Target
+      // Draw Safe Workspace Bounds (Dynamic based on Calibration)
+      ctx.strokeStyle = 'rgba(2, 132, 199, 0.5)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 5]);
+      
+      let safe_startX = cx + (workspaceMinX * scale);
+      let safe_startY = cy - (workspaceMaxY * scale); // Top edge
+      let safe_width = ((workspaceMaxX - workspaceMinX) * scale);
+      let safe_height = ((workspaceMaxY - workspaceMinY) * scale);
+      ctx.strokeRect(safe_startX, safe_startY, safe_width, safe_height);
+      
+      ctx.setLineDash([]);
+      ctx.lineWidth = 1;
+
+      // Paint Target Goal (Green)
       let tx_pix = cx + (targetX * scale);
       let ty_pix = cy - (targetY * scale);
-      ctx.fillStyle = '#00DE93'; // Using your pantone color
+      ctx.fillStyle = '#00DE93';
       ctx.beginPath(); ctx.arc(tx_pix, ty_pix, 6, 0, 2*Math.PI); ctx.fill();
+
+      // Paint Actual Arm Position (Red)
+      if (actualX !== null && actualY !== null) {
+         // Fix: Canvas TargetX = -PhyY, so ax_pix uses -actualY to match green dot mapping
+         let ax_pix = cx + (-actualY * scale);
+         let ay_pix = cy - (actualX * scale);
+         ctx.fillStyle = '#DC2626'; // Red dot
+         ctx.beginPath(); ctx.arc(ax_pix, ay_pix, 6, 0, 2*Math.PI); ctx.fill();
+         
+         ctx.strokeStyle = 'rgba(220, 38, 38, 0.4)';
+         ctx.beginPath();
+         ctx.moveTo(cx, cy);
+         ctx.lineTo(ax_pix, ay_pix);
+         ctx.stroke();
+      }
+    }
+
+    async function pollPosition() {
+        // Skip while a routine/test run owns the arm, so the 2 Hz position reads
+        // don't compete with motion commands for the serial bus.
+        if (window.__armBusy) return;
+        try {
+          let res = await fetch(SERVER + `/current_pos`);
+          let data = await res.json();
+          if (data.status === 'success') {
+             actualX = data.phy_x;
+             actualY = data.phy_y;
+             let actualZ = data.pos[3];
+             drawWorkspace();
+             const actualCoordsEl = document.getElementById('actual-coords');
+             if(actualCoordsEl) {
+                 actualCoordsEl.innerText = `Actual: X=${actualX.toFixed(2)}, Y=${actualY.toFixed(2)}, Z=${Math.round(actualZ)}`;
+             }
+          }
+        } catch(e) {} // fail silently to maintain loop
     }
 
     canvas.addEventListener('click', (e) => {
@@ -174,23 +1099,1324 @@
       
       targetX = (clickX - cx) / scale;
       targetY = (cy - clickY) / scale;
-      document.getElementById('coords').innerText = `Target: X=${targetX.toFixed(1)}, Y=${targetY.toFixed(1)}`;
+      
+      let rawTargetX = targetX;
+      let rawTargetY = targetY;
+      // Clamp to Workspace Zone:
+      targetX = Math.max(workspaceMinX, Math.min(workspaceMaxX, targetX));
+      targetY = Math.max(workspaceMinY, Math.min(workspaceMaxY, targetY));
+      
+      // Snap to 50um resolution (0.05 mm)
+      targetX = Math.round(targetX * 20) / 20;
+      targetY = Math.round(targetY * 20) / 20;
+      
+      if (rawTargetX !== targetX || rawTargetY !== targetY) {
+         setStatus("Target clamped to safe zone boundaries or snapped to 50um precision", true);
+      }
+      
+      document.getElementById('manual-x').value = targetX;
+      document.getElementById('manual-y').value = targetY;
+      document.getElementById('coords').innerText = `Target: X=${targetX.toFixed(2)}, Y=${targetY.toFixed(2)}`;
       drawWorkspace();
     });
 
+    function updateTargetFromInput() {
+      let manualXStr = document.getElementById('manual-x').value;
+      let manualYStr = document.getElementById('manual-y').value;
+      
+      // If the user clears the box, don't snap it to 0 immediately so they can type
+      if (manualXStr === "" || manualYStr === "") return;
+      
+      let rawTargetX = parseFloat(manualXStr) || 0;
+      let rawTargetY = parseFloat(manualYStr) || 0;
+      
+      targetX = Math.max(workspaceMinX, Math.min(workspaceMaxX, rawTargetX));
+      targetY = Math.max(workspaceMinY, Math.min(workspaceMaxY, rawTargetY));
+      
+      targetX = Math.round(targetX * 20) / 20;
+      targetY = Math.round(targetY * 20) / 20;
+      document.getElementById('manual-x').value = targetX;
+      document.getElementById('manual-y').value = targetY;
+      document.getElementById('coords').innerText = `Target: X=${targetX.toFixed(2)}, Y=${targetY.toFixed(2)}`;
+      drawWorkspace();
+    }
+
+  // Global Workspace Bounds
+  let workspaceMinX = -125;
+  let workspaceMaxX = 125;
+  let workspaceMinY = 220;
+  let workspaceMaxY = 275;
+
+  function loadCalibrationMap() {
+    fetch('http://127.0.0.1:5000/calibration_map')
+      .then(r => r.json())
+      .then(data => {
+        if (data.status === 'success' && data.map && data.map.math) {
+          const m = data.map.math;
+          workspaceMinX = Math.min(m.bl.x, m.tl.x);
+          workspaceMaxX = Math.max(m.br.x, m.tr.x);
+          workspaceMinY = Math.min(m.bl.y, m.br.y);
+          workspaceMaxY = Math.max(m.tl.y, m.tr.y);
+          drawWorkspace();
+        }
+      })
+      .catch(e => console.log("No calibration map loaded. Using defaults."));
+  }
+
     drawWorkspace();
+    loadCalibrationMap();
+    pollInterval = setInterval(pollPosition, 500); // 2 fps polling
+
+    let locations = [];
+    let sequence = [];
+    
+    async function addLocation(type) {
+      setStatus(`Grabbing ${type} position...`);
+      try {
+        let res = await fetch(SERVER + `/current_pos`);
+        let data = await res.json();
+        if (data.status === 'success') {
+          let count = locations.filter(l => l.type === type).length + 1;
+          let name = `${type} ${count}`;
+          locations.push({ name: name, type: type, pos: data.pos });
+          renderLocations();
+          setStatus(`Added ${name}`);
+        } else setStatus(data.message, true);
+      } catch (err) { setStatus('Connection Error', true); }
+    }
+
+    async function addMapLocation(type) {
+      const nameInput = document.getElementById('map-loc-name').value.trim();
+      const name = nameInput || `${type} ${locations.filter(l => l.type === type).length + 1}`;
+      
+      setStatus(`Saving ${name} position...`);
+      try {
+        let res = await fetch(SERVER + `/current_pos`);
+        let data = await res.json();
+        if (data.status === 'success') {
+          locations.push({ name: name, type: type, pos: data.pos });
+          renderLocations();
+          alert(`Success! Robot position saved as "${name}".`);
+          setStatus(`Added ${name}`);
+          document.getElementById('map-loc-name').value = ''; // clear input
+        } else {
+          alert(`Failed to save location: ${data.message}`);
+          setStatus(data.message, true);
+        }
+      } catch (err) { 
+        alert(`Connection Error when saving location`);
+        setStatus('Connection Error', true); 
+      }
+    }
+
+    function renderLocations() {
+      const locList = document.getElementById('loc-list');
+      const seqLoc = document.getElementById('seq-loc');
+      const gridBaseLoc = document.getElementById('grid-base-loc');
+      locList.innerHTML = '';
+      seqLoc.innerHTML = '';
+      if(gridBaseLoc) gridBaseLoc.innerHTML = '';
+      
+      locations.forEach((l, i) => {
+        locList.innerHTML += `<div style="display:flex; justify-content:space-between; background:#F8FAFC; padding:4px; border-radius:4px; align-items:center;">
+          <span style="flex: 1;"><b>${l.name}</b></span><span>Z:${Math.round(l.pos[3])}</span>
+          <button onclick="removeLocation(${i})" style="border:none; background:transparent; cursor:pointer; color:#ef4444; margin-left: 5px;">❌</button>
+        </div>`;
+        seqLoc.innerHTML += `<option value="${i}">${l.name}</option>`;
+        if(gridBaseLoc) gridBaseLoc.innerHTML += `<option value="${i}">${l.name}</option>`;
+      });
+    }
+
+    async function generateGrid() {
+      const baseIdx = document.getElementById('grid-base-loc').value;
+      if (baseIdx === "") return alert("Please select a base location first.");
+      
+      const baseLoc = locations[baseIdx];
+      const dx = parseFloat(document.getElementById('grid-dx').value);
+      const dy = parseFloat(document.getElementById('grid-dy').value);
+      const rx = parseInt(document.getElementById('grid-rx').value);
+      const ry = parseInt(document.getElementById('grid-ry').value);
+      const autoAdd = document.getElementById('grid-auto-add').checked;
+      
+      setStatus(`Generating ${rx}x${ry} array...`);
+      try {
+        let res = await fetch(SERVER + `/generate_grid`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            base_pos: baseLoc.pos,
+            delta_x: dx,
+            delta_y: dy,
+            rep_x: rx,
+            rep_y: ry
+          })
+        });
+        let data = await res.json();
+        if (data.status === 'success') {
+          let newLocs = data.locations;
+          
+          // Get available inks for cyclic auto-adding
+          let inks = locations.map((loc, idx) => ({ loc, idx })).filter(item => item.loc.type === 'INK');
+          let gridPointIndex = 0;
+
+          for (let nl of newLocs) {
+            locations.push({ name: nl.name, type: nl.type, pos: nl.pos });
+            let newLocIdx = locations.length - 1;
+            
+            if (autoAdd) {
+              if (inks.length > 0) {
+                let ink = inks[gridPointIndex % inks.length];
+                sequence.push({ action: 'aspirate', locIdx: ink.idx, locName: ink.loc.name });
+              }
+              sequence.push({ action: 'dispense', locIdx: newLocIdx, locName: nl.name });
+              gridPointIndex++;
+            }
+          }
+          renderLocations();
+          renderSequence();
+          setStatus(`Generated ${newLocs.length} locations successfully!`);
+        } else {
+          setStatus(data.message, true);
+        }
+      } catch (err) { setStatus('Connection Error', true); }
+    }
+
+    function removeLocation(idx) {
+        locations.splice(idx, 1);
+        // Safely adjust or remove sequence steps referencing this or later index
+        sequence = sequence.filter(s => s.locIdx !== idx).map(s => {
+            if (s.locIdx > idx) s.locIdx--;
+            return s;
+        });
+        renderLocations();
+        renderSequence();
+        setStatus("Location removed", false);
+    }
+
+    function addStep() {
+      const action = document.getElementById('seq-action').value;
+      if (action === 'home') {
+        sequence.push({ action: 'home', locIdx: null });
+        renderSequence();
+        return;
+      }
+      const locIdx = document.getElementById('seq-loc').value;
+      if (!locIdx) return;
+      sequence.push({ action: action, locIdx: parseInt(locIdx) });
+      renderSequence();
+    }
+
+    function renderSequence() {
+      const seqList = document.getElementById('seq-list');
+      seqList.innerHTML = '';
+      sequence.forEach((s, i) => {
+        const loc = s.action === 'home' ? null : locations[s.locIdx];
+        let locName = s.action === 'home' ? 'Home Position' : (loc ? loc.name : (s.locName || 'Unknown location'));
+        seqList.innerHTML += `<div style="display:flex; gap:10px; background:#F8FAFC; padding:4px; border-radius:4px; align-items:center;">
+          <span>${i+1}.</span><strong style="text-transform:capitalize;">${s.action}</strong>
+          <span style="flex:1;">${locName}</span>
+          <button onclick="removeStep(${i})" style="border:none; background:transparent; cursor:pointer; color:#ef4444;">❌</button>
+        </div>`;
+      });
+    }
+
+    function removeStep(idx) {
+        sequence.splice(idx, 1);
+        renderSequence();
+        setStatus("Step removed", false);
+    }
+
+    function clearTask() {
+      locations = [];
+      sequence = [];
+      renderLocations();
+      renderSequence();
+    }
+
+    async function saveRoutine() {
+      const name = document.getElementById('routine-name').value;
+      if (!name) return alert("Please enter a routine name!");
+      if (sequence.length === 0) return alert("Cannot save an empty sequence.");
+      
+      setStatus(`Saving routine ${name}...`);
+      try {
+        let res = await fetch(SERVER + `/save_sequence`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: name, locations: locations, sequence: sequence })
+        });
+        let data = await res.json();
+        if (data.status === 'success') {
+          setStatus(`Saved routine ${name} successfully!`);
+          alert(`Saved routine as ${data.message.split(' ')[2]}`);
+          document.getElementById('routine-name').value = ''; // clear input
+          refreshFileList();
+        } else {
+          setStatus(data.message, true);
+        }
+      } catch (err) { setStatus('Connection Error', true); }
+    }
+
+    let selectedFile = null;
+
+    async function loadRoutine() {
+        if (!selectedFile) return alert("Please select a file to load");
+        const fit = document.getElementById('fit-on-load').checked;
+        const scalePct = Math.min(100, Math.max(10, parseFloat(document.getElementById('fit-scale').value) || 90));
+        try {
+            let res = await fetch(SERVER + '/load_sequence', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: selectedFile, fit: fit, scale: scalePct / 100 })
+            });
+            let data = await res.json();
+            if (data.status === 'success') {
+                locations = data.locations || [];
+                // Externally generated files (e.g. logo prints) store steps as
+                // {action, pos} instead of {action, locIdx} — resolve them to a
+                // location index so the designer and runner can use them.
+                sequence = (data.sequence || []).map(s => {
+                    if (s.locIdx === undefined && s.action !== 'home' && Array.isArray(s.pos)) {
+                        const key = s.pos.join(',');
+                        const idx = locations.findIndex(l => Array.isArray(l.pos) && l.pos.join(',') === key);
+                        if (idx >= 0) return { action: s.action, locIdx: idx, locName: locations[idx].name };
+                    }
+                    return s;
+                });
+                renderLocations();
+                renderSequence();
+                setStatus(`Loaded routine ${selectedFile}` + (data.fit ? ` — ${data.fit}` : ''));
+                refreshCalibration();
+                switchTab('sequence'); // jump to designer tab
+            } else {
+                setStatus(data.message, true);
+                // A rejected fit (degenerate corners) is the #1 cause of a
+                // "distorted logo" - make the reason impossible to miss instead
+                // of leaving the old, mis-placed points on the canvas.
+                if (/fit/i.test(data.message) || /rectangle/i.test(data.message)) {
+                    alert(data.message + "\n\nUse \"Auto-map rectangle from current corner\" on the Calibrate page (teach only the top-left corner), then load again. Or untick \"Fit to wells area\" to load the points unchanged.");
+                }
+            }
+        } catch (e) {
+            setStatus(`Load failed: ${e.message}`, true);
+        }
+    }
+
+    async function refreshFileList() {
+        try {
+            let res = await fetch(SERVER + '/list_sequences');
+            let data = await res.json();
+            if (data.status === 'success') {
+                const list = document.getElementById('file-list');
+                list.innerHTML = '';
+                data.files.forEach(f => {
+                    let li = document.createElement('li');
+                    li.innerText = f;
+                    li.onclick = () => {
+                        document.querySelectorAll('#file-list li').forEach(el => el.style.background = '');
+                        li.style.background = '#e2e8f0';
+                        selectedFile = f;
+                    };
+                    list.appendChild(li);
+                });
+            }
+        } catch (e) {}
+    }
+    
+    // Call refresh on load
+    refreshFileList();
+
+    async function runSequence() {
+      if (sequence.length === 0) return setStatus("Sequence empty", true);
+      setStatus("Running Sequence...");
+      // Map sequence locIdx arrays to actual physical positions
+      const mappedSequence = sequence.map(s => ({
+         action: s.action,
+         pos: s.action === 'home' ? [] : (locations[s.locIdx] ? locations[s.locIdx].pos : s.pos)
+      }));
+      try {
+        let repeatCount = parseInt(document.getElementById('repeat-count').value) || 1;
+        let res = await fetch(SERVER + `/run_sequence`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sequence: mappedSequence, repeat_count: repeatCount })
+        });
+        let data = await res.json();
+        setStatus(data.status === 'success' ? data.message : data.message, data.status !== 'success');
+        if (data.status === 'success') {
+          startProgressPolling();
+        }
+      } catch (err) { setStatus('Connection Error', true); }
+    }
+
+    let progressInterval = null;
+
+    async function stopSequence() {
+      try {
+        let res = await fetch(SERVER + `/stop_sequence`, { method: 'POST' });
+        let data = await res.json();
+        setStatus(data.status === 'success' ? data.message : data.message, data.status !== 'success');
+      } catch (err) { setStatus('Connection Error', true); }
+    }
+
+    function startProgressPolling() {
+      document.getElementById('progress-container').style.display = 'block';
+      if (progressInterval) clearInterval(progressInterval);
+      window.__armBusy = true;   // pause position polling while the routine runs
+
+      progressInterval = setInterval(async () => {
+        try {
+          let res = await fetch(SERVER + `/sequence_status`);
+          let data = await res.json();
+          if (data.status === 'success') {
+            let prog = data.progress;
+            let percent = prog.total > 0 ? (prog.current / prog.total) * 100 : 0;
+            document.getElementById('progress-bar').style.width = percent + '%';
+            document.getElementById('progress-text').innerText = `Cycle ${prog.current}/${prog.total}`;
+            document.getElementById('progress-status').innerText = prog.status;
+            
+            if (prog.elapsed !== undefined) {
+                let formatTime = (secs) => {
+                    if (!secs || secs < 0) return "--:--";
+                    let m = Math.floor(secs / 60);
+                    let s = Math.floor(secs % 60);
+                    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+                };
+                document.getElementById('progress-time').innerText = `Elapsed: ${formatTime(prog.elapsed)} | Remaining: ${prog.current > 0 ? formatTime(prog.remaining) : 'Estimating...'}`;
+            }
+            
+            if (!data.running) {
+              clearInterval(progressInterval);
+              window.__armBusy = false;   // resume position polling
+              if (prog.status === 'Idle') {
+                setStatus('Sequence Finished successfully!');
+              }
+            }
+          }
+        } catch (err) {
+          clearInterval(progressInterval);
+          window.__armBusy = false;
+        }
+      }, 1000);
+    }
 
     function login() {
       const user = document.getElementById('username').value;
       const pass = document.getElementById('password').value;
-      
+
       if (user === 'admin' && pass === 'admin') {
         document.getElementById('login-view').style.display = 'none';
         document.getElementById('main-view').style.display = 'block';
+        document.getElementById('error-msg').innerText = '';
       } else {
         document.getElementById('error-msg').innerText = 'Invalid credentials';
       }
     }
+
+    function signOut() {
+      if (!confirm('Sign out of the Andrew Robot controller?')) return;
+      document.getElementById('main-view').style.display = 'none';
+      document.getElementById('login-view').style.display = 'block';
+      document.getElementById('password').value = '';
+      document.getElementById('error-msg').innerText = '';
+      switchTab('dashboard');   // reset to the first page for the next sign-in
+    }
+
+    // ===================== CALIBRATION & DISPENSE =====================
+    // Two separate calibrated areas: substrate = dispensing WELLS, reagent = INKS.
+    const AREAS = { substrate: 'wells', reagent: 'inks' };
+    let calState = null;                 // last /cal/state response
+    let calLocs = { inks: [], wells: [] };
+    let flipState = { substrate: false, reagent: false };
+    let arrayRefs = { substrate: null, reagent: null };  // {u,v} origin per area
+    let arrayZ = { substrate: null, reagent: null };      // ticks per area (null = use height)
+    let refPickArea = null;              // area awaiting a no-move reference click
+    let clickMark = null;                // {area, px, py} drawn until a move ends
+    const CANVAS_PAD = 30, MARK_COLOR = '#0284c7';
+
+    function gEl(area, suf) { return document.getElementById(area + '-' + suf); }
+    function locsForArea(area) { return calLocs[AREAS[area]] || []; }
+    function areaReady(area) { return calState && calState.ready && calState.ready[area]; }
+    function vScreen(area, v) { return flipState[area] ? (1 - v) : v; }
+    // Advanced tools (camera, grid, repeatability, clear-corners) act on this area.
+    function curArea() { const s = document.getElementById('cal-area'); return s ? s.value : 'substrate'; }
+
+    async function api(endpoint, body = null, method = 'POST') {
+      const opts = { method, headers: { 'Content-Type': 'application/json' } };
+      if (body !== null && method !== 'GET') opts.body = JSON.stringify(body);
+      const res = await fetch(SERVER + endpoint, opts);
+      return res.json();
+    }
+
+    async function refreshCalibration() {
+      try {
+        calState = await api('/cal/state', null, 'GET');
+      } catch (e) {
+        setStatus('Could not load calibration (is the server running?)', true);
+        return;
+      }
+      // Locations are secondary: if this call hiccups, still re-render the corner
+      // buttons below (otherwise a cleared corner kept its old colour).
+      try {
+        const locs = await api('/loc/list', null, 'GET');
+        calLocs = locs.locations || { inks: [], wells: [], targets: [] };
+      } catch (e) {}
+      
+      // SYNC CALIBRATION LOCATIONS TO THE SEQUENCE BUILDER
+      locations = locations.filter(l => !l.fromCal); // remove old synced ones
+      const addCal = (arr, typePrefix) => {
+          if (!arr) return;
+          arr.forEach(item => locations.push({ name: `[Cal] ${item.name}`, type: typePrefix, pos: item.pose, fromCal: true }));
+      };
+      addCal(calLocs.inks, 'INK');
+      addCal(calLocs.wells, 'WELL');
+      addCal(calLocs.targets, 'TARGET');
+      
+      if (typeof renderLocations === 'function') renderLocations();
+      
+      renderCalState();
+      renderLocLists();
+      updateDepositionStatus();
+      updateTargetCount();
+      ['substrate', 'reagent'].forEach(updateRefInfo);
+      await refreshMaps();
+      drawAllCanvases();
+      fetchArmSpeed();
+    }
+
+    function updateDepositionStatus() {
+      if (!calState) return;
+      ['substrate', 'reagent'].forEach(area => {
+        const el = gEl(area, 'dep-z-status');
+        if (!el) return;
+        const dep = (calState.deposition || {})[area] || {};
+        el.innerText = dep.mm == null ? 'Height: not set' : `Height: ${dep.mm} mm (${dep.ticks} ticks)`;
+      });
+    }
+
+    function renderCalState() {
+      if (!calState) return;
+      const order = [['TL', 'Top-Left'], ['TR', 'Top-Right'], ['BL', 'Bottom-Left'], ['BR', 'Bottom-Right']];
+      ['substrate', 'reagent'].forEach(area => {
+        const grid = gEl(area, 'corner-grid');
+        if (!grid) return;
+        const corners = (calState.calibration[area] || {}).corners || {};
+        grid.innerHTML = order.map(([k, label]) => {
+          const taught = corners[k] != null;
+          const tip = taught ? 'Taught — click to RESET this corner (re-map)'
+                             : 'Click to SET this corner at the current arm position';
+          return `<button class="btn ${taught ? 'btn-accent' : 'btn-primary'}" title="${tip}"
+                    onclick="toggleCorner('${area}','${k}',${taught})">${taught ? '✓ ' : '○ '}${label}</button>`;
+        }).join('');
+        // Prefill the measured area size (don't stomp a value being typed). Prefer
+        // the saved measurement, but fall back to — or override with — the corner
+        // estimate when the saved value is missing or wildly off (e.g. a stale 6mm
+        // against a ~262mm taught area), so the pitch math can't spray points out.
+        const calArea = calState.calibration[area] || {};
+        const est = (calState.est_size_mm || {})[area] || {};
+        const sane = (saved, e) => (saved && e) ? (saved / e > 1/3 && saved / e < 3) : !!saved;
+        const wEl = gEl(area, 'w-mm'), hEl = gEl(area, 'h-mm');
+        if (wEl && !wEl.value) {
+          const v = sane(calArea.width_mm, est.width) ? calArea.width_mm : est.width;
+          if (v) wEl.value = Math.round(v);
+        }
+        if (hEl && !hEl.value) {
+          const v = sane(calArea.height_mm, est.height) ? calArea.height_mm : est.height;
+          if (v) hEl.value = Math.round(v);
+        }
+        // Show the scale the array generator actually uses (from the corners).
+        const scaleEl = document.getElementById(`${area}-array-scale`);
+        if (scaleEl) {
+          const sw = sane(calArea.width_mm, est.width) ? calArea.width_mm : est.width;
+          const sh = sane(calArea.height_mm, est.height) ? calArea.height_mm : est.height;
+          scaleEl.innerText = (sw && sh)
+            ? `Δx/Δy are real mm — auto-scaled to the taught area (${Math.round(sw)} × ${Math.round(sh)} mm).`
+            : 'Δx/Δy are real mm; spacing is auto-scaled from the taught area.';
+        }
+      });
+      drawAllCanvases();
+    }
+
+    async function teachCorner(area, corner) {
+      const r = await api('/cal/teach_corner', { area, corner });
+      if (r.status === 'success') {
+        setStatus(r.message);
+        if (r.warning) alert('⚠ ' + r.warning);   // zones overlap — details from server
+        await refreshCalibration();
+      }
+      else setStatus(r.message || 'Teach failed', true);
+    }
+
+    // One-corner rectangle mapping: capture the CURRENT tip position as the
+    // top-left corner; the server derives the other 3 corners from the entered
+    // width x height, visits each at safe height, saves, and reports overlap.
+    async function teachRect(area) {
+      const w = parseFloat(gEl(area, 'w-mm').value);
+      const h = parseFloat(gEl(area, 'h-mm').value);
+      if (!w || !h || w <= 0 || h <= 0) {
+        setStatus('Enter the Plate size (mm) width and height first', true);
+        return;
+      }
+      const cornerEl = gEl(area, 'rect-corner');
+      const corner = cornerEl ? cornerEl.value : 'TL';
+      const visitEl = gEl(area, 'rect-visit');
+      const visit = visitEl ? visitEl.checked : true;
+      const label = AREAS[area];   // 'wells' | 'inks'
+      const visitNote = visit
+        ? '\n\nThe arm will then visit all 4 corners at the safe approach height so you can verify.'
+        : '\n\nThe 4 corners will be computed and saved WITHOUT moving the arm (like manual teaching).';
+      if (!confirm(`Map the ${label} area as a ${w} × ${h} mm rectangle, with the CURRENT tip position as the ${corner} corner?${visitNote}`)) return;
+      setStatus(visit ? 'Mapping rectangle — the arm will visit all 4 corners…' : 'Computing & saving rectangle (no arm motion)…');
+      let r;
+      try { r = await api('/cal/teach_rect', { area, width_mm: w, height_mm: h, corner: corner, visit: visit }); }
+      catch (e) { setStatus('Server error (is server.py running?)', true); return; }
+      if (r.status === 'success') {
+        setStatus(r.message);
+        if (r.warning) alert('⚠ ' + r.warning);
+        await refreshCalibration();
+      } else {
+        setStatus(r.message || 'Rectangle mapping failed', true);
+        alert('Rectangle mapping failed:\n\n' + (r.message || 'Unknown error'));
+      }
+    }
+
+    // Tilt-safe mapping: build the rectangle from TWO already-taught adjacent
+    // corners (measures the real edge angle), so a plate rotated relative to the
+    // robot maps correctly — unlike teachRect which assumes the plate is square.
+    async function completeRect(area) {
+      const w = parseFloat(gEl(area, 'w-mm').value);
+      const h = parseFloat(gEl(area, 'h-mm').value);
+      if (!w || !h || w <= 0 || h <= 0) {
+        setStatus('Enter the Plate size (mm) width and height first', true);
+        return;
+      }
+      const visitEl = gEl(area, 'rect-visit');
+      const visit = visitEl ? visitEl.checked : true;
+      const label = AREAS[area];
+      const visitNote = visit
+        ? '\n\nThe arm will then visit all 4 corners at the safe approach height so you can verify.'
+        : '\n\nThe 4 corners will be computed and saved WITHOUT moving the arm.';
+      if (!confirm(`Build a tilt-corrected ${w} × ${h} mm rectangle for the ${label} area from the TWO adjacent corners you've taught?\n\n(Teach two corners that share an edge first — e.g. TL then TR.)${visitNote}`)) return;
+      setStatus(visit ? 'Completing rectangle from 2 corners — the arm will visit all 4…' : 'Computing & saving rectangle (no arm motion)…');
+      let r;
+      try { r = await api('/cal/complete_rect', { area, width_mm: w, height_mm: h, visit: visit }); }
+      catch (e) { setStatus('Server error (is server.py running?)', true); return; }
+      if (r.status === 'success') {
+        setStatus(r.message);
+        if (r.warning) alert('⚠ ' + r.warning);
+        await refreshCalibration();
+      } else {
+        setStatus(r.message || 'Two-corner mapping failed', true);
+        alert('Two-corner mapping failed:\n\n' + (r.message || 'Unknown error'));
+      }
+    }
+
+    // Corner buttons toggle: an untaught (○) corner gets SET at the current arm
+    // position; a taught (✓) corner gets RESET so you can jog and re-map it. The
+    // button colour flips each way via refreshCalibration -> renderCalState.
+    function toggleCorner(area, corner, taught) {
+      if (taught) clearCorner(area, corner);
+      else teachCorner(area, corner);
+    }
+    async function clearCorner(area, corner) {
+      const r = await api('/cal/clear_corner', { area, corner });
+      if (r.status === 'success') { setStatus(r.message); await refreshCalibration(); }
+      else setStatus(r.message || 'Reset failed', true);
+    }
+
+    // Reset ALL 4 corners of one area (from that area's card) so it can be
+    // re-mapped; every corner button toggles back to the neutral ○ state.
+    async function resetCorners(area) {
+      const label = area === 'substrate' ? 'dispensing wells' : 'inks';
+      if (!confirm(`Reset all 4 corners of the ${label} area? You will re-teach them to re-map it.`)) return;
+      const r = await api('/cal/clear_area', { area });
+      setStatus(r.message, r.status !== 'success');
+      await refreshCalibration();
+    }
+
+    async function clearArea() {
+      if (!confirm(`Clear all four corners for the ${curArea()} area?`)) return;
+      const r = await api('/cal/clear_area', { area: curArea() });
+      setStatus(r.message, r.status !== 'success');
+      refreshCalibration();
+    }
+
+    // Read live per-joint state to diagnose a joint that only moves one way.
+    async function diagnoseServos() {
+      const el = document.getElementById('servo-diag');
+      el.innerText = 'Reading…';
+      let r;
+      try { r = await api('/servo/diagnose', null, 'GET'); }
+      catch (e) { el.innerText = 'Server error (is server.py running?)'; return; }
+      if (r.status !== 'success') { el.innerText = r.message || 'Error'; return; }
+      el.innerHTML =
+        '<table style="width:100%; border-collapse:collapse; font-size:11px;">' +
+        '<tr style="text-align:left; color:#64748B;"><th>Joint</th><th>Torque</th><th>Pos</th><th>Limits</th><th>Load</th></tr>' +
+        r.servos.map(s => `<tr style="border-top:1px solid #F1F5F9;">
+            <td style="padding:3px 0;">${s.name}</td>
+            <td style="color:${s.torque_enabled ? '#dc2626' : '#198754'}; font-weight:600;">${s.torque_enabled === null ? '?' : (s.torque_enabled ? 'ON' : 'off')}</td>
+            <td>${s.position == null ? '-' : s.position}</td>
+            <td>${s.angle_limit_cw == null ? '-' : (s.wheel_mode ? 'wheel' : s.angle_limit_cw + '..' + s.angle_limit_ccw)}</td>
+            <td>${s.present_load == null ? '-' : s.present_load}</td>
+          </tr>`).join('') + '</table>';
+    }
+
+    // ---- Arm speed (live) ----
+    async function setArmSpeed(v) {
+      const r = await api('/set_speed', { speed: parseInt(v) });
+      setStatus(r.message, r.status !== 'success');
+    }
+    async function fetchArmSpeed() {
+      try {
+        const r = await api('/get_speed', null, 'GET');
+        if (r.status === 'success' && r.speed != null) {
+          const slider = document.getElementById('arm-speed');
+          const label = document.getElementById('arm-speed-val');
+          if (slider) slider.value = r.speed;
+          if (label) label.innerText = r.speed;
+        }
+      } catch (e) {}
+    }
+
+    // ---- Camera selection ----
+    async function snapshotCamera() {
+      const index = parseInt(document.getElementById('cam-index').value);
+      const st = document.getElementById('cam-pick-status');
+      st.style.color = '#555'; st.innerText = `Capturing from index ${index}…`;
+      let r;
+      try { r = await api('/vision/snapshot', { index }); }
+      catch (e) { st.style.color = '#dc3545'; st.innerText = 'Server error'; return; }
+      if (r.status === 'success') {
+        const img = document.getElementById('cam-preview');
+        img.src = r.image; img.style.display = 'block';
+        st.style.color = '#198754'; st.innerText = `Index ${index}: is this the ARM camera's view?`;
+      } else { st.style.color = '#dc3545'; st.innerText = r.message; }
+    }
+    async function useArmCamera() {
+      const index = parseInt(document.getElementById('cam-index').value);
+      const st = document.getElementById('cam-pick-status');
+      let r;
+      try { r = await api('/vision/set_camera', { index }); }
+      catch (e) { st.style.color = '#dc3545'; st.innerText = 'Server error'; return; }
+      st.style.color = r.status === 'success' ? '#198754' : '#dc3545';
+      st.innerText = r.message;
+    }
+
+    // ---- Camera refine (arm camera) ----
+    async function refineCornerCam() {
+      const corner = document.getElementById('cam-corner').value;
+      const el = document.getElementById('cam-status');
+      el.style.color = '#555';
+      el.innerText = 'Centring on the fiducial… (an arm-camera window will open)';
+      let r;
+      try {
+        r = await api('/vision/refine_corner', { area: curArea(), corner });
+      } catch (e) { el.style.color = '#dc3545'; el.innerText = 'Server error'; return; }
+      el.style.color = r.status === 'success' ? '#198754' : '#dc3545';
+      el.innerText = r.message;
+      if (r.status === 'success') refreshCalibration();
+      else setStatus(r.message, true);
+    }
+    async function cameraCenterTest() {
+      const el = document.getElementById('cam-status');
+      el.style.color = '#555';
+      el.innerText = 'Centring…';
+      let r;
+      try { r = await api('/vision/center', {}); }
+      catch (e) { el.style.color = '#dc3545'; el.innerText = 'Server error'; return; }
+      el.style.color = r.status === 'success' ? '#198754' : '#dc3545';
+      el.innerText = r.message;
+    }
+
+    async function saveLoc(kind) {
+      const name = document.getElementById('loc-name').value;
+      const r = await api('/loc/save', { kind, name });
+      if (r.status === 'success') {
+        setStatus(r.message);
+        document.getElementById('loc-name').value = '';
+        refreshCalibration();
+      } else setStatus(r.message || 'Save failed', true);
+    }
+
+    function renderLocLists() {
+      const el = document.getElementById('loc-lists');
+      const section = (kind, label) => {
+        const items = calLocs[kind] || [];
+        if (!items.length) return `<div style="color:#999; margin:4px 0;">No ${label.toLowerCase()} yet.</div>`;
+        const showZ = (kind === 'inks' || kind === 'wells');
+        return `<div style="font-weight:600; margin:6px 0 2px;">${label}</div>` + items.map((it, i) =>
+          `<div style="display:flex; justify-content:space-between; align-items:center; padding:2px 0;">
+             <span>${it.name}</span>
+             <span>
+               ${showZ ? `<button class="btn btn-primary" style="padding:2px 8px;" title="Set aspiration/dispense Z for this location" onclick="setLocZ('${kind}',${i})">Z</button>` : ''}
+               <button class="btn btn-primary" style="padding:2px 8px;" onclick="gotoLoc('${kind}',${i})">Go</button>
+               <button class="btn btn-danger" style="padding:2px 8px;" onclick="deleteLoc('${kind}',${i})">✕</button>
+             </span>
+           </div>`).join('');
+      };
+      el.innerHTML = section('inks', 'Inks') + section('wells', 'Wells');
+      // Populate the dispense ink dropdown (Program card).
+      const sel = document.getElementById('dispense-ink');
+      if (sel) sel.innerHTML = (calLocs.inks || []).map((it, i) => `<option value="${i}">${it.name}</option>`).join('')
+        || '<option value="">(no inks defined)</option>';
+    }
+
+    async function gotoLoc(kind, index) {
+      const r = await api('/loc/goto', { kind, index });
+      setStatus(r.message, r.status !== 'success');
+    }
+
+    async function deleteLoc(kind, index) {
+      const r = await api('/loc/delete', { kind, index });
+      setStatus(r.message, r.status !== 'success');
+      refreshCalibration();
+    }
+
+    // ---- Per-area map canvases ----
+    function setMapFlip(area, on) { flipState[area] = !!on; drawAllCanvases(); }
+
+    function getAreaRect(cv, area) {
+      let w = cv.width - 2 * CANVAS_PAD;
+      let h = cv.height - 2 * CANVAS_PAD;
+      let x0 = CANVAS_PAD;
+      let y0 = CANVAS_PAD;
+      const calArea = (calState && calState.calibration && calState.calibration[area]) || {};
+      let calW = calArea.width_mm;
+      let calH = calArea.height_mm;
+      if ((!calW || !calH) && calState && calState.corners_xy && calState.corners_xy[area]) {
+          const corners = calState.corners_xy[area];
+          if (corners.TL && corners.TR && corners.BL) {
+              calW = Math.hypot(corners.TR.x - corners.TL.x, corners.TR.y - corners.TL.y);
+              calH = Math.hypot(corners.BL.x - corners.TL.x, corners.BL.y - corners.TL.y);
+          }
+      }
+      if (calW && calH && calW > 0 && calH > 0) {
+          const canvasAspect = w / h;
+          const physicalAspect = calW / calH;
+          if (physicalAspect > canvasAspect) {
+              const newH = w / physicalAspect;
+              y0 += (h - newH) / 2;
+              h = newH;
+          } else {
+              const newW = h * physicalAspect;
+              x0 += (w - newW) / 2;
+              w = newW;
+          }
+      }
+      return {x0, y0, w, h};
+    }
+
+    // Paint a calibrated area as a (u,v) rectangle into a given canvas element.
+    function paintArea(cv, area, msg) {
+      if (!cv) return;
+      const ctx = cv.getContext('2d');
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      if (!areaReady(area)) {
+        if (msg) msg.innerText = 'Corners not taught yet — Free X/Y, Z jog & height capture work anytime; teach the 4 corners whenever ready to enable map clicks.';
+        return;
+      }
+      if (msg) msg.innerText = 'Click = move tip + set origin · Shift-click = add a point';
+      const {x0, y0, w, h} = getAreaRect(cv, area);
+      ctx.strokeStyle = '#0d6efd'; ctx.lineWidth = 2;
+      ctx.strokeRect(x0, y0, w, h);
+      const top = flipState[area] ? ['BL', 'BR'] : ['TL', 'TR'];
+      const bot = flipState[area] ? ['TL', 'TR'] : ['BL', 'BR'];
+      ctx.fillStyle = '#555'; ctx.font = '11px sans-serif';
+      ctx.fillText(top[0], x0 - 18, y0 - 6); ctx.fillText(top[1], x0 + w + 2, y0 - 6);
+      ctx.fillText(bot[0], x0 - 18, y0 + h + 14); ctx.fillText(bot[1], x0 + w + 2, y0 + h + 14);
+      locsForArea(area).forEach(t => {
+        if (t.u == null || t.v == null) return;
+        const px = x0 + t.u * w, py = y0 + vScreen(area, t.v) * h;
+        ctx.fillStyle = '#dc3545';
+        ctx.beginPath(); ctx.arc(px, py, 4, 0, 2 * Math.PI); ctx.fill();
+      });
+      const ref = arrayRefs[area];
+      if (ref) {
+        const rx = x0 + ref.u * w, ry = y0 + vScreen(area, ref.v) * h;
+        ctx.strokeStyle = '#00b894'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(rx, ry, 8, 0, 2 * Math.PI); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(rx - 12, ry); ctx.lineTo(rx + 12, ry);
+        ctx.moveTo(rx, ry - 12); ctx.lineTo(rx, ry + 12); ctx.stroke();
+      }
+      if (clickMark && clickMark.area === area && clickMark.cv === cv) {
+        ctx.fillStyle = MARK_COLOR;
+        ctx.beginPath(); ctx.arc(clickMark.px, clickMark.py, 7, 0, 2 * Math.PI); ctx.fill();
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+      }
+    }
+
+    function drawAllCanvases() {
+      paintArea(gEl('substrate', 'canvas'), 'substrate', gEl('substrate', 'canvas-msg'));
+      paintArea(gEl('reagent', 'canvas'), 'reagent', gEl('reagent', 'canvas-msg'));
+      // The XY Workspace tab shows the substrate (wells) area.
+      paintArea(document.getElementById('xy-cal-canvas'), 'substrate', document.getElementById('xy-cal-msg'));
+    }
+
+    // Wire a canvas: click moves the arm to (u,v) of `area` and sets that area's origin.
+    function bindCanvas(cv, area) {
+      if (!cv) return;
+      cv.addEventListener('click', async (e) => {
+        if (!areaReady(area)) {
+          // The map's coordinates are DEFINED by the 4 corners, so a click can't
+          // be translated into a position yet - but the arm is still fully free:
+          // guide to the calibration-free movement tools instead of blocking.
+          setStatus('Map clicks need the 4 corners taught (anytime). To move now: 🔓 Free X/Y, Z jog, or the Workspace Map page.');
+          return;
+        }
+        const rect = cv.getBoundingClientRect();
+        const sx = cv.width / rect.width, sy = cv.height / rect.height;
+        const px = (e.clientX - rect.left) * sx, py = (e.clientY - rect.top) * sy;
+        const {x0, y0, w, h} = getAreaRect(cv, area);
+        const u = (px - x0) / w, vRaw = (py - y0) / h;
+        if (u < 0 || u > 1 || vRaw < 0 || vRaw > 1) { setStatus('Click inside the rectangle', true); return; }
+        const v = flipState[area] ? (1 - vRaw) : vRaw;
+        if (refPickArea === area) {              // no-move "Pick origin" mode
+          arrayRefs[area] = { u, v }; refPickArea = null;
+          updateRefInfo(area); drawAllCanvases();
+          setStatus(`Origin set at u=${u.toFixed(2)}, v=${v.toFixed(2)} — click Go to move there`);
+          return;
+        }
+        if (e.shiftKey) {
+          const name = prompt('Point name:', '');
+          if (name === null) return;
+          const r = await api('/loc/add_uv', { area, u, v, name });
+          setStatus(r.message, r.status !== 'success'); refreshCalibration();
+          return;
+        }
+        arrayRefs[area] = { u, v }; updateRefInfo(area);
+        clickMark = { area, cv, px, py }; paintArea(cv, area, null);
+        setStatus('Moving to clicked point (origin set)…');
+        let r;
+        try { r = await api('/cal/goto_uv', { area, u, v }); }
+        finally { clickMark = null; paintArea(cv, area, null); }
+        setStatus(r.message, r.status !== 'success');
+      });
+    }
+
+    // ---- Per-area height (Deposition Z) ----
+    async function setDepositionTyped(area) {
+      const mm = parseFloat(gEl(area, 'dep-z-mm').value);
+      if (isNaN(mm)) { setStatus('Enter a height in mm', true); return; }
+      const r = await api('/cal/set_deposition_z', { area, value_mm: mm });
+      if (r.status !== 'success') { alert('⚠ ' + r.message); setStatus(r.message, true); return; }
+      if (r.warning) alert('⚠ ' + r.warning);
+      // Keep the array-generation Z in lockstep with the zone height (see captureArrayZ)
+      arrayZ[area] = Math.round(r.ticks);
+      updateRefInfo(area);
+      setStatus(r.message); refreshCalibration();
+    }
+    async function setDepositionCurrent(area) {
+      const r = await api('/cal/set_deposition_z', { area });
+      if (r.status !== 'success') { alert('⚠ ' + r.message); setStatus(r.message, true); return; }
+      if (r.warning) alert('⚠ ' + r.warning);
+      arrayZ[area] = Math.round(r.ticks);
+      updateRefInfo(area);
+      setStatus(r.message); refreshCalibration();
+    }
+
+    // ---- Per ink/well Z ----
+    async function setLocZ(kind, index) {
+      const choice = prompt('Set Z for this location.\nEnter mm below safe height, or leave blank to capture the CURRENT robot Z:', '');
+      if (choice === null) return;
+      const body = { kind, index };
+      if (choice.trim() !== '') {
+        const mm = parseFloat(choice);
+        if (isNaN(mm)) { setStatus('Invalid mm value', true); return; }
+        body.value_mm = mm;
+      }
+      const r = await api('/loc/set_z', body);
+      if (r.status !== 'success') { alert('⚠ ' + r.message); setStatus(r.message, true); return; }
+      if (r.warning) alert('⚠ ' + r.warning);
+      setStatus(r.message);
+      refreshCalibration();
+    }
+
+    // ---- Named map library ----
+    async function saveMap() {
+      const name = document.getElementById('map-name').value;
+      if (!name.trim()) { setStatus('Enter a map name', true); return; }
+      const r = await api('/map/save', { name });
+      if (r.status === 'success') {
+        setStatus(r.message);
+        document.getElementById('map-name').value = '';
+        refreshMaps();
+      } else setStatus(r.message, true);
+    }
+    async function refreshMaps() {
+      let maps = [];
+      try { const r = await api('/map/list', null, 'GET'); maps = r.maps || []; } catch (e) { return; }
+      // Library list on the cal tab.
+      const lib = document.getElementById('map-library');
+      if (lib) {
+        lib.innerHTML = maps.length ? maps.map(m =>
+          `<div style="display:flex; justify-content:space-between; align-items:center; padding:2px 0;">
+             <span>${m.name}${m.deposition_mm != null ? ` <small style="color:#888;">(Z ${m.deposition_mm}mm)</small>` : ''}</span>
+             <span>
+               <button class="btn btn-primary" style="padding:2px 8px;" onclick="loadMap('${m.name}')">Load</button>
+               <button class="btn btn-danger" style="padding:2px 8px;" onclick="deleteMap('${m.name}')">✕</button>
+             </span>
+           </div>`).join('') : '<div style="color:#999;">No saved maps yet.</div>';
+      }
+      // Dropdown on the XY Workspace tab.
+      const sel = document.getElementById('xy-map-select');
+      if (sel) {
+        const cur = sel.value;
+        sel.innerHTML = '<option value="">(none)</option>' +
+          maps.map(m => `<option value="${m.name}">${m.name}</option>`).join('');
+        sel.value = cur;
+      }
+    }
+    async function loadMap(name) {
+      const r = await api('/map/load', { name });
+      setStatus(r.message, r.status !== 'success');
+      await refreshCalibration();
+    }
+    async function deleteMap(name) {
+      if (!confirm(`Delete saved map '${name}'?`)) return;
+      const r = await api('/map/delete', { name });
+      setStatus(r.message, r.status !== 'success');
+      refreshMaps();
+    }
+    async function loadMapFromXY() {
+      const name = document.getElementById('xy-map-select').value;
+      if (!name) { drawAllCanvases(); return; }
+      await loadMap(name);
+    }
+
+    // ---- Test Run ----
+    let testRunPoll = null;
+    async function startTestRun() {
+      document.getElementById('test-run-results').innerHTML = '';
+      document.getElementById('test-run-status').innerText = 'Starting…';
+      let r;
+      try {
+        r = await api('/test_run/start', {
+          area: 'substrate',   // Test Run verifies the dispensing wells
+          tolerance: parseInt(document.getElementById('test-tol').value) || 8,
+        });
+      } catch (e) {
+        alert('Could not reach the server. Is server.py running?');
+        document.getElementById('test-run-status').innerText = 'Connection error';
+        return;
+      }
+      if (r.status !== 'success') {
+        // Surface the exact reason loudly - it's easy to miss in the status bar.
+        alert('Test Run did not start:\n\n' + r.message);
+        document.getElementById('test-run-status').innerText = r.message;
+        setStatus(r.message, true);
+        return;
+      }
+      setStatus(r.message);
+      if (testRunPoll) clearInterval(testRunPoll);
+      window.__armBusy = true;   // pause position polling during the test run
+      testRunPoll = setInterval(pollTestRun, 700);
+    }
+    async function pollTestRun() {
+      let rep;
+      try { rep = (await api('/test_run/status', null, 'GET')).report; } catch (e) { return; }
+      const st = document.getElementById('test-run-status');
+      st.innerText = `${rep.status} — ${rep.current}/${rep.total}`;
+      const res = document.getElementById('test-run-results');
+      res.innerHTML = (rep.results || []).map(r => {
+        const ok = r.ok;
+        const detail = ok ? `OK (±${r.deviation})` : (r.reason || 'flagged');
+        return `<div style="color:${ok ? '#198754' : '#dc3545'};">
+                  ${ok ? '✓' : '✗'} ${r.name} — ${detail}</div>`;
+      }).join('');
+      if (!rep.running) { clearInterval(testRunPoll); testRunPoll = null; window.__armBusy = false; }
+    }
+
+    async function generateGridTargets() {
+      const r = await api('/cal/generate_targets', {
+        area: curArea(),
+        rows: parseInt(document.getElementById('grid-rows').value) || 1,
+        cols: parseInt(document.getElementById('grid-cols').value) || 1,
+        margin: parseFloat(document.getElementById('grid-margin').value) || 0,
+        replace: document.getElementById('grid-replace').checked,
+      });
+      setStatus(r.message, r.status !== 'success');
+      refreshCalibration();
+    }
+
+    async function clearTargets(area) {
+      const n = locsForArea(area).length;
+      if (n && !confirm(`Remove all ${n} points from this area?`)) return;
+      const r = await api('/loc/clear_targets', { area });
+      setStatus(r.message, r.status !== 'success');
+      refreshCalibration();
+    }
+    function updateTargetCount() {
+      const w = gEl('substrate', 'count'); if (w) w.innerText = `${(calLocs.wells || []).length} wells`;
+      const i = gEl('reagent', 'count'); if (i) i.innerText = `${(calLocs.inks || []).length} inks`;
+    }
+
+    // ---- Reference-anchored array, per area ----
+    function pickReference(area) {
+      refPickArea = area;
+      setStatus(`Click the ${AREAS[area]} map to set the origin (no move)`);
+    }
+    function updateRefInfo(area) {
+      const r = gEl(area, 'ref-info');
+      if (r) r.innerText = arrayRefs[area]
+        ? `Origin: u=${arrayRefs[area].u.toFixed(2)}, v=${arrayRefs[area].v.toFixed(2)}` : 'Origin: not set';
+      const z = gEl(area, 'z-info');
+      if (z) z.innerText = arrayZ[area] != null ? `Array Z: ${arrayZ[area]} ticks` : 'Array Z: uses height';
+    }
+    async function goToReference(area) {
+      if (!arrayRefs[area]) { setStatus('Pick an origin first', true); return; }
+      const r = await api('/cal/goto_uv', { area, u: arrayRefs[area].u, v: arrayRefs[area].v });
+      setStatus(r.message, r.status !== 'success');
+    }
+    async function captureArrayZ(area) {
+      // One manual capture sets THE zone height everywhere: the runtime
+      // dispense/aspirate height (deposition Z, surface-following) AND the Z
+      // baked into newly generated array points. These were two separate
+      // values before, so a height captured here silently did not apply to
+      // the actual dispensing runs.
+      const r = await api('/cal/set_deposition_z', { area });
+      if (r.status !== 'success') { setStatus(r.message || 'Could not capture Z', true); return; }
+      if (r.warning) alert('⚠ ' + r.warning);
+      arrayZ[area] = Math.round(r.ticks);
+      updateRefInfo(area);
+      setStatus(`${AREAS[area]} Z captured: ${r.ticks} ticks (${r.mm} mm) — set as this zone's working height`);
+      refreshCalibration();
+    }
+    async function generateArray(area) {
+      if (!arrayRefs[area]) { setStatus('Pick an origin first (click the map)', true); return; }
+      const r = await api('/cal/generate_array', {
+        area, u: arrayRefs[area].u, v: arrayRefs[area].v, z: arrayZ[area],
+        delta_x_mm: parseFloat(gEl(area, 'dx').value) || 0,
+        delta_y_mm: parseFloat(gEl(area, 'dy').value) || 0,
+        rep_x: parseInt(gEl(area, 'nx').value) || 1,
+        rep_y: parseInt(gEl(area, 'ny').value) || 1,
+        replace: gEl(area, 'replace').checked,
+        // Pitch is in real mm; the server derives the area's mm scale from the
+        // taught corners, so we no longer pass a user-entered area size here.
+      });
+      setStatus(r.message, r.status !== 'success');
+      refreshCalibration();
+    }
+
+    async function runRepeatability() {
+      const el = document.getElementById('rep-result');
+      el.innerText = 'Running… the arm will cycle to the point repeatedly.';
+      const r = await api('/cal/repeatability', {
+        area: curArea(),
+        u: parseFloat(document.getElementById('rep-u').value),
+        v: parseFloat(document.getElementById('rep-v').value),
+        cycles: parseInt(document.getElementById('rep-cycles').value) || 10,
+      });
+      if (r.status !== 'success') { el.innerText = 'Error: ' + r.message; return; }
+      const lines = r.stats.map(s => `${s.channel.padEnd(9)} spread ${s.spread} ticks (σ=${s.std})`);
+      el.innerText = `${r.passed ? '✓ PASS' : '✗ FAIL'} — max spread ${r.max_spread} ticks `
+        + `(tolerance ${r.tolerance})\n` + lines.join('\n');
+      el.style.color = r.passed ? '#198754' : '#dc3545';
+    }
+
+    let dispensePoll = null;
+    async function buildAndRunDispense() {
+      const inkVal = document.getElementById('dispense-ink').value;
+      if (inkVal === '') { setStatus('Define an ink first', true); return; }
+      const plan = await api('/dispense/plan', {
+        ink_index: parseInt(inkVal),
+        home_between: document.getElementById('dispense-home').checked,
+      });
+      if (plan.status !== 'success') { setStatus(plan.message, true); return; }
+      const repeat = parseInt(document.getElementById('dispense-repeat').value) || 1;
+      const dwell = parseFloat(document.getElementById('dispense-dwell').value) || 2.0;
+      const run = await api('/run_sequence', { sequence: plan.sequence, repeat_count: repeat, dispense_dwell: dwell });
+      setStatus(run.message, run.status !== 'success');
+      const st = document.getElementById('dispense-status');
+      if (run.status !== 'success') { st.innerText = 'Error: ' + run.message; return; }
+      st.innerText = `Running: ${plan.message}, ×${repeat}`;
+      if (dispensePoll) clearInterval(dispensePoll);
+      window.__armBusy = true;   // pause position polling during the print run
+      dispensePoll = setInterval(async () => {
+        let s;
+        try { s = await api('/sequence_status', null, 'GET'); } catch (e) { return; }
+        const p = s.progress || {};
+        st.innerText = `${p.status || ''} — cycle ${p.current || 0}/${p.total || 0}`;
+        if (!s.running) { clearInterval(dispensePoll); dispensePoll = null; window.__armBusy = false; }
+      }, 800);
+    }
+
+    function toggleTheme() {
+      const isDark = document.body.classList.toggle('dark-theme');
+      localStorage.setItem('theme', isDark ? 'dark' : 'light');
+      updateThemeToggleBtn();
+    }
+    function updateThemeToggleBtn() {
+      const btn = document.getElementById('theme-toggle');
+      if (btn) {
+        if (document.body.classList.contains('dark-theme')) {
+          btn.innerHTML = '&#9728; Light Mode';
+        } else {
+          btn.innerHTML = '&#127769; Dark Mode';
+        }
+      }
+    }
+    if (localStorage.getItem('theme') === 'dark') {
+      document.body.classList.add('dark-theme');
+    }
+    updateThemeToggleBtn();
+
+    bindCanvas(gEl('substrate', 'canvas'), 'substrate');
+    bindCanvas(gEl('reagent', 'canvas'), 'reagent');
+    bindCanvas(document.getElementById('xy-cal-canvas'), 'substrate');
   </script>
+<!-- Calibration Modal -->
+<div id="calib-modal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;">
+  <div class="card" style="width: 400px; padding: 20px;">
+    <h2>Workspace Calibration</h2>
+    <p>We will map a mathematical rectangle onto your physical table.</p>
+    
+    <div id="calib-step-0">
+      <div class="input-group">
+        <label>Rectangle Width (mm)</label>
+        <input type="number" id="calib-w" value="250">
+      </div>
+      <div class="input-group">
+        <label>Rectangle Depth/Height (mm)</label>
+        <input type="number" id="calib-h" value="55">
+      </div>
+      <div style="margin-top:10px;">
+        <p><strong>Note:</strong> We will assume the center of this rectangle is directly in front of the robot at Y=247.5 (safe zone). You will be asked to manually pull the arm to the 4 corners of your physical grid.</p>
+      </div>
+      <button class="btn btn-accent" style="width:100%; margin-top:15px;" onclick="nextCalibStep()">Start Calibration</button>
+      <button class="btn" style="width:100%; margin-top:5px;" onclick="closeCalibration()">Cancel</button>
+    </div>
+
+    <div id="calib-step-1" style="display: none;">
+      <h3 id="calib-title" style="color: #0284c7;">Step 1: Bottom-Left</h3>
+      <p id="calib-desc">Move the arm to the bottom-left corner of your physical grid.</p>
+      
+      <div style="background:#f1f5f9; padding: 10px; border-radius:4px; margin-bottom:15px; text-align:center;">
+        <div style="font-size:12px; color:#64748b; margin-bottom:5px;">To move the arm by hand, click below:</div>
+        <button id="btn-torque-toggle" class="btn btn-danger" onclick="toggleTorque()">Motors ON (Click to Disable)</button>
+      </div>
+
+      <div style="display:flex; justify-content:space-between;">
+        <button class="btn" onclick="closeCalibration()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveCalibCorner()">Save Corner</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let calibCorners = [];
+let calibWidth = 250;
+let calibHeight = 55;
+let torqueEnabled = true;
+
+function startCalibration() {
+  document.getElementById('calib-modal').style.display = 'flex';
+  document.getElementById('calib-step-0').style.display = 'block';
+  document.getElementById('calib-step-1').style.display = 'none';
+  calibCorners = [];
+}
+
+function closeCalibration() {
+  document.getElementById('calib-modal').style.display = 'none';
+  if (!torqueEnabled) toggleTorque(); // Ensure torque is back on
+}
+
+function nextCalibStep() {
+  if (calibCorners.length === 0) {
+    calibWidth = parseFloat(document.getElementById('calib-w').value);
+    calibHeight = parseFloat(document.getElementById('calib-h').value);
+    document.getElementById('calib-step-0').style.display = 'none';
+    document.getElementById('calib-step-1').style.display = 'block';
+  }
+  
+  const steps = [
+    {t: "Step 1: Bottom-Left", d: "Move the arm to the bottom-left corner of your physical grid."},
+    {t: "Step 2: Bottom-Right", d: "Move the arm to the bottom-right corner."},
+    {t: "Step 3: Top-Right", d: "Move the arm to the top-right corner."},
+    {t: "Step 4: Top-Left", d: "Move the arm to the top-left corner."}
+  ];
+  
+  if (calibCorners.length < 4) {
+    document.getElementById('calib-title').innerText = steps[calibCorners.length].t;
+    document.getElementById('calib-desc').innerText = steps[calibCorners.length].d;
+  } else {
+    finishCalibration();
+  }
+}
+
+function toggleTorque() {
+  const action = torqueEnabled ? 'disable' : 'enable';
+  fetch(`http://127.0.0.1:5000/torque/${action}`, {method: 'POST'})
+    .then(r => r.json())
+    .then(data => {
+      if (data.status === 'success') {
+        torqueEnabled = !torqueEnabled;
+        const btn = document.getElementById('btn-torque-toggle');
+        if (torqueEnabled) {
+            btn.className = "btn btn-danger";
+            btn.innerText = "Motors ON (Click to Disable)";
+        } else {
+            btn.className = "btn btn-accent";
+            btn.innerText = "Motors OFF (Click to Enable)";
+        }
+      }
+    });
+}
+
+function saveCalibCorner() {
+  // Fetch actual current physical position
+  fetch('http://127.0.0.1:5000/current_pos')
+    .then(response => response.json())
+    .then(data => {
+      if(data.status === "success") {
+        calibCorners.push({x: data.phy_x, y: data.phy_y});
+        nextCalibStep();
+      } else {
+        alert("Error reading position: " + data.message);
+      }
+    });
+}
+
+function finishCalibration() {
+  document.getElementById('calib-title').innerText = "Saving...";
+  document.getElementById('calib-desc').innerText = "Sending calibration map to robot...";
+  
+  // Center is Y=247.5, X=0 (default safe zone center)
+  const cy = 247.5;
+  const hW = calibWidth / 2.0;
+  const hH = calibHeight / 2.0;
+  
+  const calibData = {
+    math: {
+      bl: {x: -hW, y: cy - hH},
+      br: {x: hW, y: cy - hH},
+      tr: {x: hW, y: cy + hH},
+      tl: {x: -hW, y: cy + hH}
+    },
+    phys: {
+      bl: calibCorners[0],
+      br: calibCorners[1],
+      tr: calibCorners[2],
+      tl: calibCorners[3]
+    }
+  };
+  
+  fetch('http://127.0.0.1:5000/save_calibration', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(calibData)
+  }).then(r => r.json()).then(data => {
+    if (data.status === 'success') {
+      alert("Calibration saved successfully! The robot will now perfectly map to your physical grid.");
+      loadCalibrationMap(); // Reload map to update UI bounding box
+      closeCalibration();
+    } else {
+      alert("Failed to save: " + data.message);
+      closeCalibration();
+    }
+  });
+}
+</script>
 </body>
 </html>
