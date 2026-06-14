@@ -114,7 +114,18 @@ class AndrewConfig:
         pass
 
     def _load_tip_geometry_offset(self, element):
-        pass
+        self.tip_geometry_offset = {}
+        if element is None:
+            return
+        for e in element:
+            if e.tag.startswith('block'):
+                try:
+                    self.tip_geometry_offset[e.tag] = {
+                        'x': float(e.find('x').text),
+                        'y': float(e.find('y').text)
+                    }
+                except (AttributeError, ValueError):
+                    pass
 
     def _load_image_processor(self, element):
         pass
@@ -123,7 +134,23 @@ class AndrewConfig:
         pass
 
     def _load_arm_deflection(self, element):
-        pass
+        self.arm_deflection = {}
+        if element is None:
+            return
+        active = element.find('active')
+        if active is not None and active.text != '1':
+            return
+            
+        for e in element:
+            if e.tag.startswith('block'):
+                try:
+                    self.arm_deflection[e.tag] = {
+                        'LT': float(e.find('LT').text),
+                        'RB': float(e.find('RB').text),
+                        'LB': float(e.find('LB').text),
+                    }
+                except (AttributeError, ValueError):
+                    pass
 
 def main():
     config = AndrewConfig('D:\\Resources\\andrew.xml')

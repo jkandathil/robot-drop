@@ -91,6 +91,13 @@ class Servo:
         if dxl_comm_result != COMM_SUCCESS:
             raise ServoCommunicationException(dxl_comm_result, self.packet_handler.getTxRxResult(dxl_comm_result))
         if dxl_error != 0:
+            # An OVERLOAD alarm (bit 0x20) means a joint stalled (reach limit / hard
+            # stop / plunger bottoming). The transaction itself still completed, so
+            # rather than crashing every read/write that follows, clear the latch and
+            # carry on. Any OTHER alarm bit (overheating, voltage, ...) still raises.
+            if dxl_error & self.OVERLOAD_BIT and not (dxl_error & ~self.OVERLOAD_BIT):
+                self.recover_alarm()
+                return
             raise ServoPacketException(dxl_error, self.packet_handler.getRxPacketError(dxl_error))
     
     def write_or_stage(self, address: int, length: int, data: int, stage: bool):
@@ -266,6 +273,59 @@ class Servo:
     def disable_torque(self, stage=False):
         self.write_or_stage(self.control_table.addr_torque_enable, 1, 0, stage)
 
+    # Protocol-1.0 status error byte: bit5 (0x20) = Overload. When it trips, the
+    # servo runs Alarm Shutdown - it zeroes the RAM torque limit and latches the
+    # error bit, so the joint stops and EVERY following read/write raises. The two
+    # helpers below clear that latch; the writes tolerate the still-set error bit
+    # (a normal write would re-raise the very alarm we are trying to clear).
+    OVERLOAD_BIT = 0x20
+
+    def _write_quiet(self, address: int, length: int, data: int, retries=4):
+        last = None
+        for _ in range(retries):
+            res, _err = self.packet_handler.writeTxRx(
+                self.port_handler, self.id, address, length,
+                self.int_to_bytelist(data, length))
+            if res == COMM_SUCCESS:
+                return
+            last = res
+            time.sleep(0.01)
+        if last is not None and last != COMM_SUCCESS:
+            raise ServoCommunicationException(last, self.packet_handler.getTxRxResult(last))
+
+    def _read_quiet(self, address: int, length: int, retries=3):
+        """Read without raising on the status error byte (used during alarm recovery)."""
+        for _ in range(retries):
+            res, comm, _err = self.packet_handler.readTxRx(
+                self.port_handler, self.id, address, length)
+            if comm == COMM_SUCCESS:
+                return self.bytelist_to_int(res)
+            time.sleep(0.01)
+        return None
+
+    def recover_alarm(self, torque_limit: int = None):
+        """Clear a latched overload shutdown: re-write the RAM torque limit (which the
+        shutdown zeroes) and cycle Torque Enable. The limit is taken from the caller,
+        else the joint's configured value, else the intact EEPROM Max Torque. Best
+        effort, never raises, and rate-limited so a sustained stall doesn't thrash the
+        bus (it's re-tried at most a few times a second)."""
+        now = time.time()
+        if now - getattr(self, '_last_recover', 0.0) < 0.4:
+            return
+        self._last_recover = now
+        try:
+            if not torque_limit:
+                torque_limit = getattr(self, 'configured_torque_limit', None) \
+                    or self._read_quiet(self.control_table.addr_max_torque, 2)
+            self._write_quiet(self.control_table.addr_torque_enable, 1, 0)
+            time.sleep(0.02)
+            if torque_limit:
+                self._write_quiet(self.control_table.addr_torque_limit, 2, int(torque_limit))
+            self._write_quiet(self.control_table.addr_torque_enable, 1, 1)
+            time.sleep(0.02)
+        except Exception:
+            pass
+
     @property
     def led(self):
         return self.read_bytes(self.control_table.addr_led, 1)
@@ -319,6 +379,14 @@ class Servo:
     @moving_speed.setter
     def moving_speed(self, speed: int):
         self.write_bytes(self.control_table.addr_moving_speed, 2, speed)
+
+    @property
+    def goal_acceleration(self):
+        return self.read_bytes(self.control_table.addr_goal_acceleration, 1)
+
+    @goal_acceleration.setter
+    def goal_acceleration(self, accel: int):
+        self.write_bytes(self.control_table.addr_goal_acceleration, 1, accel)
 
     @property
     def torque_limit(self):

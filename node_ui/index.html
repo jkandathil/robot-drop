@@ -477,8 +477,6 @@
         <select id="xy-map-select" onchange="loadMapFromXY()" style="width:100%; padding:8px; margin:6px 0 8px 0;">
           <option value="">(none)</option>
         </select>
-        <label style="font-size:12px; display:flex; align-items:center; gap:6px; margin-bottom:8px;">
-          <input type="checkbox" id="flip-xy" onchange="setMapFlip('substrate', this.checked)"> Flip top ↔ bottom</label>
         <canvas id="xy-cal-canvas" width="320" height="300"
           style="border:1px solid #ccc; border-radius:6px; width:100%; background:#fafafa; cursor:crosshair;"></canvas>
         <div id="xy-cal-msg" style="font-size:12px; color:#888; margin-top:6px;">Select a saved map to operate inside it.</div>
@@ -590,6 +588,11 @@
             <span style="font-size:11px; color:#94A3B8;">&times;</span>
             <input type="number" id="substrate-h-mm" placeholder="height" step="0.5" min="1" style="width:62px; padding:6px;">
           </div>
+          <div class="row-flex" style="gap:8px; align-items:center; margin-bottom:6px;">
+            <span style="font-size:11px; color:#475569;" title="Plate tilt vs the robot base, in degrees (0 = square to the base). Single-corner Auto-map needs this to handle a rotated plate. Teach 2 adjacent corners and click Measure to fill it automatically.">Plate angle (&deg;)</span>
+            <input type="number" id="substrate-angle" value="0" step="0.5" style="width:62px; padding:6px;">
+            <button class="btn btn-primary" style="padding:4px 8px; font-size:11px;" title="Compute the plate's tilt from 2 adjacent taught corners and fill the angle, so single-corner Auto-map maps the rotated plate correctly." onclick="measureAngle('substrate')">&#8635; Measure</button>
+          </div>
           <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px; align-items:end;">
             <label style="font-size:11px; color:#475569; display:flex; flex-direction:column; gap:3px;">&#916;x mm <input type="number" id="substrate-dx" value="9" step="0.5" style="width:100%; padding:6px; box-sizing:border-box;"></label>
             <label style="font-size:11px; color:#475569; display:flex; flex-direction:column; gap:3px;">&#916;y mm <input type="number" id="substrate-dy" value="9" step="0.5" style="width:100%; padding:6px; box-sizing:border-box;"></label>
@@ -646,6 +649,11 @@
             <input type="number" id="reagent-w-mm" placeholder="width" step="0.5" min="1" style="width:62px; padding:6px;">
             <span style="font-size:11px; color:#94A3B8;">&times;</span>
             <input type="number" id="reagent-h-mm" placeholder="height" step="0.5" min="1" style="width:62px; padding:6px;">
+          </div>
+          <div class="row-flex" style="gap:8px; align-items:center; margin-bottom:6px;">
+            <span style="font-size:11px; color:#475569;" title="Plate tilt vs the robot base, in degrees (0 = square to the base). Single-corner Auto-map needs this to handle a rotated plate. Teach 2 adjacent corners and click Measure to fill it automatically.">Plate angle (&deg;)</span>
+            <input type="number" id="reagent-angle" value="0" step="0.5" style="width:62px; padding:6px;">
+            <button class="btn btn-primary" style="padding:4px 8px; font-size:11px;" title="Compute the plate's tilt from 2 adjacent taught corners and fill the angle, so single-corner Auto-map maps the rotated plate correctly." onclick="measureAngle('reagent')">&#8635; Measure</button>
           </div>
           <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px; align-items:end;">
             <label style="font-size:11px; color:#475569; display:flex; flex-direction:column; gap:3px;">&#916;x mm <input type="number" id="reagent-dx" value="9" step="0.5" style="width:100%; padding:6px; box-sizing:border-box;"></label>
@@ -1527,7 +1535,6 @@
     const AREAS = { substrate: 'wells', reagent: 'inks' };
     let calState = null;                 // last /cal/state response
     let calLocs = { inks: [], wells: [] };
-    let flipState = { substrate: false, reagent: false };
     let arrayRefs = { substrate: null, reagent: null };  // {u,v} origin per area
     let arrayZ = { substrate: null, reagent: null };      // ticks per area (null = use height)
     let refPickArea = null;              // area awaiting a no-move reference click
@@ -1537,7 +1544,7 @@
     function gEl(area, suf) { return document.getElementById(area + '-' + suf); }
     function locsForArea(area) { return calLocs[AREAS[area]] || []; }
     function areaReady(area) { return calState && calState.ready && calState.ready[area]; }
-    function vScreen(area, v) { return flipState[area] ? (1 - v) : v; }
+    function vScreen(area, v) { return v; }
     // Advanced tools (camera, grid, repeatability, clear-corners) act on this area.
     function curArea() { const s = document.getElementById('cal-area'); return s ? s.value : 'substrate'; }
 
@@ -1659,16 +1666,19 @@
       }
       const cornerEl = gEl(area, 'rect-corner');
       const corner = cornerEl ? cornerEl.value : 'TL';
+      const angleEl = gEl(area, 'angle');
+      const angle = angleEl ? (parseFloat(angleEl.value) || 0) : 0;
       const visitEl = gEl(area, 'rect-visit');
       const visit = visitEl ? visitEl.checked : true;
       const label = AREAS[area];   // 'wells' | 'inks'
+      const angleNote = angle ? ` tilted ${angle}°` : '';
       const visitNote = visit
         ? '\n\nThe arm will then visit all 4 corners at the safe approach height so you can verify.'
         : '\n\nThe 4 corners will be computed and saved WITHOUT moving the arm (like manual teaching).';
-      if (!confirm(`Map the ${label} area as a ${w} × ${h} mm rectangle, with the CURRENT tip position as the ${corner} corner?${visitNote}`)) return;
+      if (!confirm(`Map the ${label} area as a ${w} × ${h} mm${angleNote} rectangle, with the CURRENT tip position as the ${corner} corner?${visitNote}`)) return;
       setStatus(visit ? 'Mapping rectangle — the arm will visit all 4 corners…' : 'Computing & saving rectangle (no arm motion)…');
       let r;
-      try { r = await api('/cal/teach_rect', { area, width_mm: w, height_mm: h, corner: corner, visit: visit }); }
+      try { r = await api('/cal/teach_rect', { area, width_mm: w, height_mm: h, corner: corner, angle_deg: angle, visit: visit }); }
       catch (e) { setStatus('Server error (is server.py running?)', true); return; }
       if (r.status === 'success') {
         setStatus(r.message);
@@ -1708,6 +1718,23 @@
       } else {
         setStatus(r.message || 'Two-corner mapping failed', true);
         alert('Two-corner mapping failed:\n\n' + (r.message || 'Unknown error'));
+      }
+    }
+
+    // Fill the Plate angle field by measuring the tilt from two adjacent corners
+    // already taught in this area, so single-corner Auto-map can handle a rotated
+    // plate. Measure once, then map repeatedly from a single corner.
+    async function measureAngle(area) {
+      let r;
+      try { r = await api('/cal/measure_angle', { area }); }
+      catch (e) { setStatus('Server error (is server.py running?)', true); return; }
+      if (r.status === 'success') {
+        const el = gEl(area, 'angle');
+        if (el) el.value = r.angle_deg;
+        setStatus(`Plate tilt measured: ${r.angle_deg}° — single-corner Auto-map will now use it.`);
+      } else {
+        setStatus(r.message || 'Could not measure angle', true);
+        alert(r.message || 'Could not measure angle');
       }
     }
 
@@ -1873,7 +1900,6 @@
     }
 
     // ---- Per-area map canvases ----
-    function setMapFlip(area, on) { flipState[area] = !!on; drawAllCanvases(); }
 
     function getAreaRect(cv, area) {
       let w = cv.width - 2 * CANVAS_PAD;
@@ -1919,8 +1945,8 @@
       const {x0, y0, w, h} = getAreaRect(cv, area);
       ctx.strokeStyle = '#0d6efd'; ctx.lineWidth = 2;
       ctx.strokeRect(x0, y0, w, h);
-      const top = flipState[area] ? ['BL', 'BR'] : ['TL', 'TR'];
-      const bot = flipState[area] ? ['TL', 'TR'] : ['BL', 'BR'];
+      const top = ['TL', 'TR'];
+      const bot = ['BL', 'BR'];
       ctx.fillStyle = '#555'; ctx.font = '11px sans-serif';
       ctx.fillText(top[0], x0 - 18, y0 - 6); ctx.fillText(top[1], x0 + w + 2, y0 - 6);
       ctx.fillText(bot[0], x0 - 18, y0 + h + 14); ctx.fillText(bot[1], x0 + w + 2, y0 + h + 14);
@@ -1970,7 +1996,7 @@
         const {x0, y0, w, h} = getAreaRect(cv, area);
         const u = (px - x0) / w, vRaw = (py - y0) / h;
         if (u < 0 || u > 1 || vRaw < 0 || vRaw > 1) { setStatus('Click inside the rectangle', true); return; }
-        const v = flipState[area] ? (1 - vRaw) : vRaw;
+        const v = vRaw;
         if (refPickArea === area) {              // no-move "Pick origin" mode
           arrayRefs[area] = { u, v }; refPickArea = null;
           updateRefInfo(area); drawAllCanvases();

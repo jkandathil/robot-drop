@@ -1,5 +1,5 @@
 from dynamixel_sdk import PortHandler, PacketHandler
-from .servo import Servo
+from .servo import Servo, ServoPacketException
 from .led import LedController
 from .config import AndrewConfig
 import time
@@ -7,8 +7,14 @@ import time
 class AndrewRobot:
     DXL_PROTOCOL_VERSION = 1.0
     DXL_ALL_ID = 254
-    # Reduced from 10 to 2 to tighten physical accuracy and fix 0.5mm XY tip drift
-    POSITION_ERROR_MARGIN = 2
+    # "Move finished" convergence margin, in encoder ticks. The geared servos only
+    # settle to ~3-8 ticks of their goal, so a margin of 1 could NEVER be met - every
+    # move then ran the full timeout below (seconds) before the code moved on, and
+    # since one pose move stacks ~5 of these, that was the source of the big delays.
+    # 4 ticks is within real precision. This does NOT lower final accuracy: the servo
+    # keeps driving to its exact goal regardless; the margin only decides how long the
+    # code WAITS before issuing the next instruction.
+    POSITION_ERROR_MARGIN = 4
     # TODO Most of these should be read from config files on the robot rather than being hardcoded
     # They may function incorrectly on the wrong model of robot
     SAFE_HEIGHT = 1600
@@ -41,29 +47,39 @@ class AndrewRobot:
     def _init_servos(self):
         # I increased the Ki for the linear and gripper because they had trouble at low speeds
 
-        # Values taken from AndrewOS logs
+        # Values taken from AndrewOS logs, tuned for higher repeatability
         self.shoulder = Servo(1, self.port_handler, self.packet_handler)
         self.shoulder.torque_limit = 750
         self.shoulder.set_joint_mode(0, 4095)
-        self.shoulder.set_pid(20, 0, 0)
+        self.shoulder.set_pid(40, 5, 15)
+        try: self.shoulder.goal_acceleration = 20
+        except ValueError: pass
         self.shoulder.temperature_limit = 75
 
         self.elbow = Servo(2, self.port_handler, self.packet_handler)
         self.elbow.torque_limit = 750
         self.elbow.set_joint_mode(0, 4095)
-        self.elbow.set_pid(20, 0, 0)
+        self.elbow.set_pid(40, 5, 15)
+        try: self.elbow.goal_acceleration = 20
+        except ValueError: pass
         self.elbow.temperature_limit = 75
 
         self.wrist = Servo(3, self.port_handler, self.packet_handler)
         self.wrist.torque_limit = 750
         self.wrist.set_joint_mode(0, 4095)
         self.wrist.set_pid(20, 0, 0)
+        # The wrist swings the long pipette tip; without an acceleration ramp it
+        # snapped to full speed instantly - the main visible jerk of the arm.
+        try: self.wrist.goal_acceleration = 20
+        except ValueError: pass
         self.wrist.temperature_limit = 75
 
         self.linear = Servo(4, self.port_handler, self.packet_handler)
         self.linear.torque_limit = 1023
         self.linear.set_joint_mode(0, 4095)
-        self.linear.set_pid(40, 5, 0)
+        self.linear.set_pid(50, 10, 15)
+        try: self.linear.goal_acceleration = 20
+        except ValueError: pass
         self.linear.temperature_limit = 90
 
         self.thumb = Servo(5, self.port_handler, self.packet_handler)
@@ -93,7 +109,22 @@ class AndrewRobot:
             self.thumb,
             self.gripper,
             self.twister]
-        
+
+        # Reply with no return delay so every read/write round-trip is as fast as the
+        # bus allows (the factory default adds ~0.5 ms of latency per transaction).
+        for s in self.servos:
+            try:
+                s.return_delay_time = 0
+            except Exception:
+                pass
+
+        # Remember each joint's configured torque limit. An overload Alarm Shutdown
+        # zeroes the RAM torque limit on Protocol 1.0; we re-apply this value to
+        # bring the joint back (see recover_overload / _move_servos_unsafe).
+        _torque_limits = {1: 750, 2: 750, 3: 750, 4: 1023, 5: 1023, 6: 1023, 7: 1023}
+        for s in self.servos:
+            s.configured_torque_limit = _torque_limits.get(s.id, 1023)
+
         # Make sure the setter gets called
         self.max_speed = self._max_speed
         
@@ -111,7 +142,45 @@ class AndrewRobot:
             if curr_speed == 0 or curr_speed > value:
                 s.moving_speed = value
 
+    def _bulk_read_positions(self):
+        """
+        Read every joint's present position in ONE bus transaction via GroupBulkRead
+        instead of one round-trip per servo. Returns the list, or None if bulk read
+        isn't supported / fails - the caller then falls back to per-servo reads. Once
+        it fails it's disabled so we never pay a repeated timeout.
+        """
+        if getattr(self, '_bulk_disabled', False):
+            return None
+        reader = getattr(self, '_pos_reader', None)
+        try:
+            from dynamixel_sdk import GroupBulkRead, COMM_SUCCESS
+            if reader is None:
+                reader = GroupBulkRead(self.port_handler, self.packet_handler)
+                self._pos_params = []
+                for s in self.servos:
+                    addr = s.control_table.addr_present_position
+                    if not reader.addParam(s.id, addr, 2):
+                        raise RuntimeError("addParam failed")
+                    self._pos_params.append((s.id, addr))
+                self._pos_reader = reader
+            if reader.txRxPacket() != COMM_SUCCESS:
+                raise RuntimeError("bulk txRx failed")
+            out = []
+            for sid, addr in self._pos_params:
+                if not reader.isAvailable(sid, addr, 2):
+                    raise RuntimeError("bulk data unavailable")
+                out.append(reader.getData(sid, addr, 2))
+            return out
+        except Exception:
+            # Disable and fall back; per-servo reads always work on Protocol 1.0.
+            self._bulk_disabled = True
+            self._pos_reader = None
+            return None
+
     def get_servo_positions(self):
+        bulk = self._bulk_read_positions()
+        if bulk is not None:
+            return bulk
         return [s.position for s in self.servos]
 
     def execute_staged_writes(self):
@@ -140,14 +209,23 @@ class AndrewRobot:
     def thumb_eject(self):
         self.move_servos(thumb=self.THUMB_EJECT_POSITION)
 
-    def grab_pipette(self, slot_index: int):
+    def grab_pipette(self, slot_index: int, grab_position=None, grab_height=None):
         """
         Grabs a pipette from the specified slot. Slots are numbered 1-5, with 1 being closest to the robot.
+
+        The factory positions in andrew.xml were taught for Gilson Pipetman bodies.
+        grab_position (shoulder, elbow, wrist) and grab_height override them for
+        pipettes with a different body geometry (e.g. Rainin LTS), which need the
+        gripper to reach a different depth/height inside the holder.
         """
         slot = self.config.pipette_slots[f'slot{slot_index}']
+        if grab_position is None:
+            grab_position = slot.grab_position
+        if grab_height is None:
+            grab_height = self.GRAB_HEIGHT
         self.open_gripper()
-        self.move_servos_proportional(*slot.start_position, linear=self.GRAB_HEIGHT)
-        self.move_servos_proportional(*slot.grab_position)
+        self.move_servos_proportional(*slot.start_position, linear=grab_height)
+        self.move_servos_proportional(*grab_position)
         self.close_gripper()
         # Pull the pipette out so that the user doesn't need to worry about bumping into the holder
         self.move_servos_proportional(*slot.start_position, linear=self.SAFE_HEIGHT)
@@ -159,8 +237,18 @@ class AndrewRobot:
                         linear: int=None):
         """
         Moves exclusively the servos related to arm movement. Same as move_servos, but clarifies the intent better.
+
+        When two or more XY joints are commanded, their speeds are scaled so they
+        all ARRIVE TOGETHER (proportional move). With fixed per-joint speeds the
+        nearest joint finished first while the rest kept going, so the tip traced
+        a kinked, jerky path instead of a smooth sweep.
         """
-        self.move_servos(shoulder=shoulder, elbow=elbow, wrist=wrist, linear=linear)
+        xy_goals = sum(p is not None for p in (shoulder, elbow, wrist))
+        if xy_goals >= 2:
+            self.move_servos_proportional(shoulder=shoulder, elbow=elbow,
+                                          wrist=wrist, linear=linear)
+        else:
+            self.move_servos(shoulder=shoulder, elbow=elbow, wrist=wrist, linear=linear)
     
     def move_servos_proportional(self,
                                  shoulder: int=None,
@@ -210,10 +298,9 @@ class AndrewRobot:
             if dist is None:
                 continue
             calc_speed = int(dist / max_time)
-            # Avoid setting speed to 0, because 0 means maximum speed in Dynamixel servos
-            safe_speed = max(1, calc_speed) if dist > self.POSITION_ERROR_MARGIN else calc_speed
-            print(f"Servo {s.id} distance: {dist} speed: {safe_speed}")
-            s.moving_speed = safe_speed
+            # Never 0: on Dynamixel, moving_speed 0 means UNLIMITED speed - even for
+            # an already-arrived joint that would let the goal write snap at full power.
+            s.moving_speed = max(1, calc_speed)
 
         self.move_servos(shoulder=shoulder,
                          elbow=elbow,
@@ -280,16 +367,36 @@ class AndrewRobot:
         while not done:
             done = True
             for s, p in zip(self.servos, positions):
+                if p is None:
+                    continue
+                try:
+                    arrived = abs(s.position - p) <= self.POSITION_ERROR_MARGIN
+                except ServoPacketException as e:
+                    # A joint stalled hard enough to trip its overload alarm (the
+                    # plunger bottoming out, or the tip pressing the surface). Clear
+                    # it and HOLD this joint where it stalled - don't crash the whole
+                    # move, and don't keep driving into the stop (which re-overloads).
+                    if getattr(e, 'error', 0) & 0x20:
+                        s.recover_alarm(getattr(s, 'configured_torque_limit', 1023))
+                        try:
+                            s.set_goal_position(s.position)
+                        except Exception:
+                            pass
+                        print(f"Warning: servo {s.id} overload - cleared and holding position")
+                        continue
+                    raise
                 # if not there yet, we need to continue
-                if p is not None and abs(s.position - p) > self.POSITION_ERROR_MARGIN:
+                if not arrived:
                     done = False
                     break
             
-            # If stuck pushing an obstacle for more than 5 seconds without reaching goal, break out!
-            if not done and time.time() - timeout_start > 5.0:
+            # Safety net for a genuinely blocked/stuck servo. With a realistic margin
+            # above this is rarely hit; 2.5 s is ample for any single arm move and
+            # avoids a long stall when something does jam.
+            if not done and time.time() - timeout_start > 2.5:
                 print("Warning: Movement timeout! A servo didn't reach its exact target position.")
                 break
-                
+
             if not done:
                 time.sleep(0.05) # Prevent serial buffer flooding!
 
@@ -300,6 +407,19 @@ class AndrewRobot:
     def disable_torque(self):
         for s in self.servos:
             s.disable_torque()
+
+    def recover_overload(self, servo=None):
+        """Clear a latched overload shutdown and restore torque so motion can resume.
+        Pass a single servo, or none to sweep all. Returns the recovered joint ids."""
+        targets = [servo] if servo is not None else list(self.servos)
+        recovered = []
+        for s in targets:
+            try:
+                s.recover_alarm(getattr(s, 'configured_torque_limit', 1023))
+                recovered.append(s.id)
+            except Exception:
+                pass
+        return recovered
 
     def led_arm(self, power=255):
         self.led.set_power(self.ARM_LED_ID, power)

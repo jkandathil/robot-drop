@@ -177,8 +177,10 @@ def get_correction_offset(x, y, block_id=None):
             h = tl_m['y'] - bl_m['y']
             if w == 0 or h == 0: return (0.0, 0.0)
             
-            u = (x - bl_m['x']) / w
-            v = (y - bl_m['y']) / h
+            # physical x is Forward, which maps to math's y-axis
+            v = (x - bl_m['y']) / h
+            # physical y is Left, math's x-axis is Right. 
+            u = (-y - bl_m['x']) / w
             
             # Allow slight extrapolation if outside bounds
             phys_x = (1-u)*(1-v)*bl_p['x'] + u*(1-v)*br_p['x'] + u*v*tr_p['x'] + (1-u)*v*tl_p['x']
@@ -2167,12 +2169,28 @@ def cal_teach_rect():
         elbow_up = taught[1] >= CENTER_TICK     # keep the present elbow configuration
         w_world = taught[0] + taught[1] + taught[2]   # lock the wrist's world angle
         
-        x_tl = px0 + (height if corner_at in ('BL', 'BR') else 0.0)
-        y_tl = py0 + (width if corner_at in ('TR', 'BR') else 0.0)
-        phys = {'TL': (x_tl, y_tl),
-                'TR': (x_tl, y_tl - width),
-                'BR': (x_tl - height, y_tl - width),
-                'BL': (x_tl - height, y_tl)}
+        # Plate rotation: one corner can't reveal how the plate is tilted relative to
+        # the robot base, so the operator supplies it (0 = square to the base, the old
+        # behaviour). Baseline directions: width runs TL->TR along -Y, height runs
+        # TL->BL along -X; both are rotated by angle_deg so a tilted plate maps right.
+        try:
+            angle_deg = float(data.get('angle_deg', 0.0) or 0.0)
+        except (TypeError, ValueError):
+            angle_deg = 0.0
+        th = math.radians(angle_deg)
+        ct, st = math.cos(th), math.sin(th)
+        wdx, wdy = st, -ct                 # rotate (0,-1) by th  (TL->TR, length=width)
+        hdx, hdy = -ct, -st                # rotate (-1,0) by th  (TL->BL, length=height)
+        off = {'TL': (0.0, 0.0),
+               'TR': (wdx * width, wdy * width),
+               'BL': (hdx * height, hdy * height),
+               'BR': (wdx * width + hdx * height, wdy * width + hdy * height)}
+        ox, oy = off[corner_at]
+        tlx, tly = px0 + ox, py0 + oy
+        phys = {'TL': (tlx, tly),
+                'TR': (tlx + wdx * width, tly + wdy * width),
+                'BL': (tlx + hdx * height, tly + hdy * height),
+                'BR': (tlx + wdx * width + hdx * height, tly + wdy * width + hdy * height)}
         corners = {}
         for name, (px, py) in phys.items():
             if name == corner_at:
@@ -2186,7 +2204,9 @@ def cal_teach_rect():
                                 "message": f"Corner {name} of a {width:g}x{height:g} mm rectangle is OUT OF "
                                            f"REACH (arm max {MAX_REACH:.0f} mm from the base). Reduce the size, "
                                            f"move the area closer to the base, or set 'I'm at corner' to the "
-                                           f"corner you actually jogged to (you taught {corner_at})."}), 400
+                                           f"corner you actually jogged to (you taught {corner_at}).\\n\\n"
+                                           f"Hint: Make sure your Left/Right match the ROBOT'S perspective (looking forward from the base), "
+                                           f"not your perspective facing the robot."}), 400
             wr = w_world - fsx - fex
             if not (TICK_MIN <= fsx <= TICK_MAX and TICK_MIN <= fex <= TICK_MAX):
                 return jsonify({"status": "error",
@@ -2407,6 +2427,41 @@ def cal_complete_rect():
                         "corners_xy": _corners_xy(area), "ready": _area_ready(area)})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/cal/measure_angle', methods=['POST'])
+def cal_measure_angle():
+    """
+    Compute the plate's tilt (degrees) from any two ADJACENT taught corners, so the
+    single-corner Auto-map can be told the rotation it cannot infer on its own. The
+    angle matches teach_rect's convention: 0 = square to the base; width edge
+    (TL->TR) sits at angle-90 degrees, height edge (TL->BL) at angle+180.
+    """
+    data = request.json or {}
+    area = data.get('area', 'substrate')
+    if area not in ('substrate', 'reagent'):
+        return jsonify({"status": "error", "message": "Unknown area"}), 400
+    xy = _corners_xy(area)
+
+    def edge_deg(a, b):
+        return math.degrees(math.atan2(xy[b]['y'] - xy[a]['y'], xy[b]['x'] - xy[a]['x']))
+    th = None
+    if 'TL' in xy and 'TR' in xy:
+        th = edge_deg('TL', 'TR') + 90.0
+    elif 'BL' in xy and 'BR' in xy:
+        th = edge_deg('BL', 'BR') + 90.0
+    elif 'TL' in xy and 'BL' in xy:
+        th = edge_deg('TL', 'BL') - 180.0
+    elif 'TR' in xy and 'BR' in xy:
+        th = edge_deg('TR', 'BR') - 180.0
+    if th is None:
+        return jsonify({"status": "error",
+                        "message": "Teach two ADJACENT corners first (e.g. TL and TR, or TL and BL), "
+                                   "then Measure."}), 400
+    # Normalise to (-180, 180].
+    th = (th + 180.0) % 360.0 - 180.0
+    return jsonify({"status": "success", "angle_deg": round(th, 2),
+                    "message": f"Plate tilt measured: {th:.1f}deg"})
 
 
 @app.route('/cal/clear_area', methods=['POST'])

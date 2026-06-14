@@ -421,11 +421,11 @@ class RobotGUI:
         file_path = filedialog.asksaveasfilename(defaultextension=".json", filetypes=[("JSON files", "*.json")])
         if file_path:
             with open(file_path, "w") as f:
-                json.append = {
+                data = {
                     "ink_pos": self.ink_pos,
                     "well_pos": self.well_pos
                 }
-                json.dump(json.append, f, indent=4)
+                json.dump(data, f, indent=4)
             messagebox.showinfo("Success", "Positions successfully saved!")
 
     def cmd_load_cfg(self):
