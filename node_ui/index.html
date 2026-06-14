@@ -545,6 +545,61 @@
         <span style="font-size:11px; color:#94A3B8;">Higher = faster zone mapping &middot; lower = gentler, more precise dispensing</span>
       </div>
 
+      <div class="card-panel" style="padding:12px 18px;">
+        <!-- Controls row (on top, as before) -->
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+          <span style="font-size:13px; font-weight:600; display:flex; align-items:center; gap:6px;">&#128247; Arm camera (live)</span>
+          <button class="btn btn-accent" style="padding:5px 12px; font-size:12px;" onclick="startArmCam()">&#9654; Open live view</button>
+          <button class="btn btn-primary" style="padding:5px 12px; font-size:12px;" onclick="stopArmCam()">&#9209; Close</button>
+          <span style="width:1px; height:22px; background:#e2e8f0;"></span>
+          <button class="btn btn-primary" style="padding:5px 10px; font-size:12px;" onclick="detectArmCam()" title="Probe camera indices and list the ones that open, so you can pick the arm camera">&#128269; Detect cameras</button>
+          <select id="arm-cam-index" style="padding:5px; font-size:12px;"><option value="">(detect first)</option></select>
+          <button class="btn btn-primary" style="padding:5px 10px; font-size:12px;" onclick="useArmCamIndex()" title="Save the selected index as the arm camera and restart the live view">Use this index</button>
+          <label style="font-size:12px; display:flex; align-items:center; gap:5px;" title="Continuously run the + cross detector on the live feed: a green dot marks what it locks onto, and the label shows FOUND / not found."><input type="checkbox" id="arm-cam-detect" onchange="toggleDetect(this.checked)"> Show + detection</label>
+          <button class="btn btn-primary" style="padding:5px 10px; font-size:12px; background:#7c3aed;" title="DIAGNOSTIC: open the robot's serial link only (no torque, no homing). Run with the live view open to test whether merely connecting kills the arm camera, vs the homing current surge." onclick="connectOnly()">&#128268; Connect only (camera test)</button>
+          <span id="arm-cam-status" style="font-size:11px; color:#64748B;"></span>
+        </div>
+        <!-- Proper grid: camera cell (left) | jog wheel (right) -->
+        <div style="display:grid; grid-template-columns:480px 240px; gap:24px; align-items:start; justify-content:start; margin-top:12px;">
+          <!-- Camera cell: fixed 4:3 box, always visible (placeholder until streaming) -->
+          <div>
+            <div style="position:relative; width:480px; max-width:100%; aspect-ratio:4/3; background:#0b1220; border:1px solid #cbd5e1; border-radius:8px; overflow:hidden; display:flex; align-items:center; justify-content:center;">
+              <span id="arm-cam-placeholder" style="color:#7c8aa0; font-size:13px;">&#9654; Open live view to start the feed</span>
+              <img id="arm-cam-img" alt="Arm camera feed" style="display:none; position:absolute; inset:0; width:100%; height:100%; object-fit:contain; cursor:crosshair;"
+                   onclick="armCamClick(event)"
+                   onerror="document.getElementById('arm-cam-status').innerText='Stream error — wrong index, or camera busy. Try Detect cameras.';">
+            </div>
+            <div style="font-size:11px; color:#94A3B8; margin-top:6px;"><b>Click a + cross in the image</b> and the robot drives it under the tip (click again to fine-tune). Red cross = image centre (where the tip lands) &middot; green dot = auto-detected mark. Then pick the corner below and Save.</div>
+          </div>
+          <!-- iPod-style jog wheel: X/Y around the ring, Z up/down in the hub -->
+          <div style="display:flex; flex-direction:column; align-items:center; gap:8px; justify-self:center;">
+            <span style="font-size:12px; font-weight:600; color:#475569;">Jog the arm (scan)</span>
+            <div style="position:relative; width:180px; height:180px;">
+              <div style="position:absolute; inset:0; border-radius:50%; background:#eef2f7; border:1px solid #cbd5e1;"></div>
+              <button class="btn btn-primary" style="position:absolute; top:8px; left:50%; transform:translateX(-50%); padding:5px 12px; font-size:13px; min-width:48px;" title="Move forward (+X, away from base)" onclick="jogXY('x',1)">X+</button>
+              <button class="btn btn-primary" style="position:absolute; bottom:8px; left:50%; transform:translateX(-50%); padding:5px 12px; font-size:13px; min-width:48px;" title="Move back (−X, toward base)" onclick="jogXY('x',-1)">X&minus;</button>
+              <button class="btn btn-primary" style="position:absolute; left:8px; top:50%; transform:translateY(-50%); padding:5px 12px; font-size:13px; min-width:48px;" title="Move to the robot's right (−Y)" onclick="jogXY('y',-1)">Y&minus;</button>
+              <button class="btn btn-primary" style="position:absolute; right:8px; top:50%; transform:translateY(-50%); padding:5px 12px; font-size:13px; min-width:48px;" title="Move to the robot's left (+Y)" onclick="jogXY('y',1)">Y+</button>
+              <!-- center hub: hold for Z up / down -->
+              <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:66px; height:66px; border-radius:50%; overflow:hidden; border:1px solid #cbd5e1; display:flex; flex-direction:column; box-shadow:0 0 0 4px #fff;">
+                <button class="btn btn-primary" style="flex:1; border-radius:0; padding:0; font-size:13px;" title="Hold to raise Z (tip up)" onmousedown="sendCommand('/z_jog/start',{direction:'up',speed:'fine',area:'substrate'})" onmouseup="sendCommand('/z_jog/stop')" onmouseleave="sendCommand('/z_jog/stop')">Z&#9650;</button>
+                <button class="btn btn-primary" style="flex:1; border-radius:0; padding:0; font-size:13px;" title="Hold to lower Z (tip down)" onmousedown="sendCommand('/z_jog/start',{direction:'down',speed:'fine',area:'substrate'})" onmouseup="sendCommand('/z_jog/stop')" onmouseleave="sendCommand('/z_jog/stop')">Z&#9660;</button>
+              </div>
+            </div>
+            <div class="row-flex" style="gap:6px; align-items:center;">
+              <span style="font-size:11px; color:#475569;">XY step</span>
+              <select id="jog-step" style="padding:4px; font-size:12px;">
+                <option value="0.5">0.5 mm</option>
+                <option value="1">1 mm</option>
+                <option value="2" selected>2 mm</option>
+                <option value="5">5 mm</option>
+                <option value="10">10 mm</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div style="display:flex; gap:18px; align-items:flex-start; flex-wrap:wrap; justify-content:flex-start;">
         <div class="card-panel" style="width: 350px;">
           <h3>1 &middot; Dispensing wells area</h3>
@@ -572,6 +627,19 @@
           <label style="font-size:11px; color:#475569; display:flex; align-items:center; gap:6px; margin-top:6px;" title="ON: after computing the rectangle, the arm drives to each corner so you can watch/verify it. OFF: the corners are just computed and saved without any arm motion (same as manual teaching) — use this if the visit stalls/overloads at full extension."><input type="checkbox" id="substrate-rect-visit" checked> Visit corners to verify (arm moves)</label>
           <button class="btn btn-primary" style="width:100%; margin-top:6px;" title="Jog the tip to ONE corner of the zone, choose which corner it is above, fill in Plate size (mm), then click: the robot derives the other 3 corners, visits each at safe height to verify, and saves a true rectangle. Warns if it overlaps the inks area." onclick="teachRect('substrate')">&#9645; Auto-map rectangle from current corner</button>
           <button class="btn btn-primary" style="width:100%; margin-top:6px;" title="TILT-SAFE: for a plate that is NOT square to the robot. Teach TWO adjacent corners (e.g. TL then TR) with the corner buttons above, enter Plate size, then click — the robot measures the real edge angle between them and builds the rectangle along it, so a rotated plate maps correctly." onclick="completeRect('substrate')">&#9727; Complete rectangle from 2 taught corners (tilt-safe)</button>
+          <button class="btn btn-accent" style="width:100%; margin-top:6px;" title="CAMERA AUTO-MAP: lay down a rough rectangle first (above), put a dark + cross at each corner, then click — the arm camera drives to each rough corner, centres on its + mark, and saves the exact (camera-accurate) pose for all 4." onclick="autoMapCamera('substrate')">&#128247; Auto-map by camera (lock onto 4 + crosses)</button>
+          <div style="border:1px dashed #c7d2e0; border-radius:6px; padding:8px; margin-top:6px;">
+            <div style="font-size:11px; color:#475569; margin-bottom:5px;" title="Define the area straight from the + marks — no rough rectangle needed. Aim the camera at a cross (anywhere in view), click Find &amp; align: the robot drives itself until the cross is under the tip and stops. Then pick which corner that is and Save. Repeat for all 4.">&#127919; Find &amp; align to + crosses (robot moves itself):</div>
+            <button class="btn btn-accent" style="width:100%; margin-bottom:5px;" title="The arm servos until the nearest + cross is centred under the tip, then stops. It does the moving — you just aim the camera roughly at a cross first." onclick="alignCross('substrate')">&#128247; Find &amp; align to nearest cross</button>
+            <div class="row-flex" style="gap:6px; align-items:center;">
+              <span style="font-size:11px; color:#475569;">This corner is:</span>
+              <select id="substrate-camcap-corner" style="flex:1; padding:5px; font-size:12px;">
+                <option value="TL">Top-left</option><option value="TR">Top-right</option>
+                <option value="BL">Bottom-left</option><option value="BR">Bottom-right</option>
+              </select>
+              <button class="btn btn-primary" style="padding:5px 10px; font-size:12px;" title="Save the pose the robot is aligned at as this corner (do this right after Find &amp; align, before moving the arm)." onclick="saveAlignedCorner('substrate')">&#9989; Save</button>
+            </div>
+          </div>
           <label style="font-size:12px; display:flex; align-items:center; gap:6px; margin:8px 0 6px;"><input type="checkbox" onchange="setMapFlip('substrate', this.checked)"> Flip top &#8596; bottom</label>
           <canvas id="substrate-canvas" width="350" height="240" style="border:1px solid #ccc; border-radius:6px; width:100%; background:#fafafa; cursor:crosshair;"></canvas>
           <div id="substrate-canvas-msg" style="font-size:12px; color:#888; margin-top:6px;">Corners not taught yet &mdash; Free X/Y, Z jog &amp; height capture work anytime; teach corners whenever ready.</div>
@@ -634,6 +702,19 @@
           <label style="font-size:11px; color:#475569; display:flex; align-items:center; gap:6px; margin-top:6px;" title="ON: after computing the rectangle, the arm drives to each corner so you can watch/verify it. OFF: the corners are just computed and saved without any arm motion (same as manual teaching) — use this if the visit stalls/overloads at full extension."><input type="checkbox" id="reagent-rect-visit" checked> Visit corners to verify (arm moves)</label>
           <button class="btn btn-primary" style="width:100%; margin-top:6px;" title="Jog the tip to ONE corner of the zone, choose which corner it is above, fill in Plate size (mm), then click: the robot derives the other 3 corners, visits each at safe height to verify, and saves a true rectangle. Warns if it overlaps the dispensing area." onclick="teachRect('reagent')">&#9645; Auto-map rectangle from current corner</button>
           <button class="btn btn-primary" style="width:100%; margin-top:6px;" title="TILT-SAFE: for a plate that is NOT square to the robot. Teach TWO adjacent corners (e.g. TL then TR) with the corner buttons above, enter Plate size, then click — the robot measures the real edge angle between them and builds the rectangle along it, so a rotated plate maps correctly." onclick="completeRect('reagent')">&#9727; Complete rectangle from 2 taught corners (tilt-safe)</button>
+          <button class="btn btn-accent" style="width:100%; margin-top:6px;" title="CAMERA AUTO-MAP: lay down a rough rectangle first (above), put a dark + cross at each corner, then click — the arm camera drives to each rough corner, centres on its + mark, and saves the exact (camera-accurate) pose for all 4." onclick="autoMapCamera('reagent')">&#128247; Auto-map by camera (lock onto 4 + crosses)</button>
+          <div style="border:1px dashed #c7d2e0; border-radius:6px; padding:8px; margin-top:6px;">
+            <div style="font-size:11px; color:#475569; margin-bottom:5px;" title="Define the area straight from the + marks — no rough rectangle needed. Aim the camera at a cross (anywhere in view), click Find &amp; align: the robot drives itself until the cross is under the tip and stops. Then pick which corner that is and Save. Repeat for all 4.">&#127919; Find &amp; align to + crosses (robot moves itself):</div>
+            <button class="btn btn-accent" style="width:100%; margin-bottom:5px;" title="The arm servos until the nearest + cross is centred under the tip, then stops. It does the moving — you just aim the camera roughly at a cross first." onclick="alignCross('reagent')">&#128247; Find &amp; align to nearest cross</button>
+            <div class="row-flex" style="gap:6px; align-items:center;">
+              <span style="font-size:11px; color:#475569;">This corner is:</span>
+              <select id="reagent-camcap-corner" style="flex:1; padding:5px; font-size:12px;">
+                <option value="TL">Top-left</option><option value="TR">Top-right</option>
+                <option value="BL">Bottom-left</option><option value="BR">Bottom-right</option>
+              </select>
+              <button class="btn btn-primary" style="padding:5px 10px; font-size:12px;" title="Save the pose the robot is aligned at as this corner (do this right after Find &amp; align, before moving the arm)." onclick="saveAlignedCorner('reagent')">&#9989; Save</button>
+            </div>
+          </div>
           <label style="font-size:12px; display:flex; align-items:center; gap:6px; margin:8px 0 6px;"><input type="checkbox" onchange="setMapFlip('reagent', this.checked)"> Flip top &#8596; bottom</label>
           <canvas id="reagent-canvas" width="350" height="240" style="border:1px solid #ccc; border-radius:6px; width:100%; background:#fafafa; cursor:crosshair;"></canvas>
           <div id="reagent-canvas-msg" style="font-size:12px; color:#888; margin-top:6px;">Corners not taught yet &mdash; Free X/Y, Z jog &amp; height capture work anytime; teach corners whenever ready.</div>
@@ -1043,20 +1124,60 @@
       ctx.strokeStyle = '#aaa';
       ctx.beginPath(); ctx.moveTo(cx,0); ctx.lineTo(cx,CANVAS_HEIGHT); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(0,cy); ctx.lineTo(CANVAS_WIDTH,cy); ctx.stroke();
+
+      // Draw Calibrated Area Contours
+      if (typeof calState !== 'undefined' && calState && calState.corners_xy) {
+        ctx.setLineDash([5, 5]);
+        ctx.lineWidth = 2;
+        
+        // Substrate area (Blue contour)
+        if (calState.corners_xy.substrate && Object.keys(calState.corners_xy.substrate).length === 4) {
+          let s = calState.corners_xy.substrate;
+          ctx.strokeStyle = 'rgba(2, 132, 199, 0.8)'; // Blueish
+          ctx.beginPath();
+          ctx.moveTo(cx + s.TL.x * scale, cy - s.TL.y * scale);
+          ctx.lineTo(cx + s.TR.x * scale, cy - s.TR.y * scale);
+          ctx.lineTo(cx + s.BR.x * scale, cy - s.BR.y * scale);
+          ctx.lineTo(cx + s.BL.x * scale, cy - s.BL.y * scale);
+          ctx.closePath();
+          ctx.stroke();
+        }
+        
+        // Reagent area (Orange contour)
+        if (calState.corners_xy.reagent && Object.keys(calState.corners_xy.reagent).length === 4) {
+          let r = calState.corners_xy.reagent;
+          ctx.strokeStyle = 'rgba(249, 115, 22, 0.8)'; // Orange
+          ctx.beginPath();
+          ctx.moveTo(cx + r.TL.x * scale, cy - r.TL.y * scale);
+          ctx.lineTo(cx + r.TR.x * scale, cy - r.TR.y * scale);
+          ctx.lineTo(cx + r.BR.x * scale, cy - r.BR.y * scale);
+          ctx.lineTo(cx + r.BL.x * scale, cy - r.BL.y * scale);
+          ctx.closePath();
+          ctx.stroke();
+        }
+        
+        ctx.setLineDash([]);
+        ctx.lineWidth = 1;
+      }
       
-      // Draw Safe Workspace Bounds (Dynamic based on Calibration)
-      ctx.strokeStyle = 'rgba(2, 132, 199, 0.5)';
-      ctx.lineWidth = 2;
-      ctx.setLineDash([5, 5]);
-      
-      let safe_startX = cx + (workspaceMinX * scale);
-      let safe_startY = cy - (workspaceMaxY * scale); // Top edge
-      let safe_width = ((workspaceMaxX - workspaceMinX) * scale);
-      let safe_height = ((workspaceMaxY - workspaceMinY) * scale);
-      ctx.strokeRect(safe_startX, safe_startY, safe_width, safe_height);
-      
-      ctx.setLineDash([]);
-      ctx.lineWidth = 1;
+      // Draw Safe Workspace Bounds (Dynamic based on Calibration bounding box)
+      if (globalCalMapCorners) {
+        ctx.strokeStyle = 'rgba(2, 132, 199, 0.4)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+        
+        let m = globalCalMapCorners;
+        ctx.beginPath();
+        ctx.moveTo(cx + m.tl.x * scale, cy - m.tl.y * scale);
+        ctx.lineTo(cx + m.tr.x * scale, cy - m.tr.y * scale);
+        ctx.lineTo(cx + m.br.x * scale, cy - m.br.y * scale);
+        ctx.lineTo(cx + m.bl.x * scale, cy - m.bl.y * scale);
+        ctx.closePath();
+        ctx.stroke();
+        
+        ctx.setLineDash([]);
+        ctx.lineWidth = 1;
+      }
 
       // Paint Target Goal (Green)
       let tx_pix = cx + (targetX * scale);
@@ -1155,12 +1276,15 @@
   let workspaceMinY = 220;
   let workspaceMaxY = 275;
 
+  let globalCalMapCorners = null;
+
   function loadCalibrationMap() {
     fetch('http://127.0.0.1:5000/calibration_map')
       .then(r => r.json())
       .then(data => {
         if (data.status === 'success' && data.map && data.map.math) {
           const m = data.map.math;
+          globalCalMapCorners = m;
           workspaceMinX = Math.min(m.bl.x, m.tl.x);
           workspaceMaxX = Math.max(m.br.x, m.tr.x);
           workspaceMinY = Math.min(m.bl.y, m.br.y);
@@ -1718,6 +1842,155 @@
       } else {
         setStatus(r.message || 'Two-corner mapping failed', true);
         alert('Two-corner mapping failed:\n\n' + (r.message || 'Unknown error'));
+      }
+    }
+
+    // ---- Live arm-camera view (shared MJPEG stream) ----
+    function startArmCam() {
+      const img = document.getElementById('arm-cam-img');
+      // cache-bust so a re-open always reconnects the stream
+      img.src = SERVER + '/vision/stream?ts=' + Date.now();
+      img.style.display = 'block';
+      document.getElementById('arm-cam-status').innerText = 'Live';
+    }
+    function stopArmCam() {
+      const img = document.getElementById('arm-cam-img');
+      img.src = '';                       // disconnect → server releases the camera
+      img.style.display = 'none';
+      document.getElementById('arm-cam-status').innerText = 'Closed';
+    }
+    async function detectArmCam() {
+      document.getElementById('arm-cam-status').innerText = 'Probing 0–9 (this takes a few seconds)…';
+      let r;
+      try { r = await api('/vision/cameras', null, 'GET'); }
+      catch (e) { setStatus('Server error (is server.py running?)', true); return; }
+      if (r.status !== 'success') { document.getElementById('arm-cam-status').innerText = r.message || 'probe failed'; return; }
+      const sel = document.getElementById('arm-cam-index');
+      const devs = r.devices || (r.cameras || []).map(i => ({ index: i, name: 'Camera ' + i }));
+      sel.innerHTML = devs.length
+        ? devs.map(d => `<option value="${d.index}">Index ${d.index} — ${d.name}${d.width ? ` (${d.width}×${d.height})` : ''}</option>`).join('')
+        : '<option value="">(none delivered a frame)</option>';
+      if (devs.some(d => d.index === r.current)) sel.value = r.current;
+      const usbCams = devs.filter(d => /USB Video|Logitech/i.test(d.name));
+      let hint = '';
+      if (usbCams.length >= 2) hint = ' · two USB Video Devices = arm + volume; open the live view to tell which is which.';
+      else if (usbCams.length === 1) hint = ' · only ONE robot (USB Video) camera enumerated — the other is still missing (power-cycle the robot).';
+      document.getElementById('arm-cam-status').innerText =
+        'Found ' + devs.length + ': ' + devs.map(d => d.index + '=' + d.name).join(', ') + ' · current ' + r.current + hint;
+    }
+    async function useArmCamIndex() {
+      const sel = document.getElementById('arm-cam-index');
+      const idx = parseInt(sel.value, 10);
+      if (isNaN(idx)) { setStatus('Detect cameras and pick an index first', true); return; }
+      stopArmCam();                       // free the device before switching index
+      const r = await api('/vision/set_camera', { index: idx });
+      setStatus(r.message, r.status !== 'success');
+      if (r.status === 'success') setTimeout(startArmCam, 400);   // let the old cap close
+    }
+
+    // Step 1: robot drives itself to align on the nearest + cross and stops there
+    // (no save yet). Aim the camera roughly at a cross first; it locks onto the one
+    // nearest the centre.
+    async function alignCross(area) {
+      setStatus('Aligning on the nearest + cross — the arm is moving…');
+      let r;
+      try { r = await api('/vision/align_cross', { area, show: true }); }
+      catch (e) { setStatus('Server error (is server.py running?)', true); return; }
+      if (r.status === 'success') {
+        setStatus('✓ ' + r.message);   // "Aligned … now pick which corner this is and Save."
+      } else {
+        setStatus(r.message || 'Align failed', true);
+        alert('Could not align:\n\n' + (r.message || 'Unknown error'));
+      }
+    }
+
+    // Step 2: confirm which corner the robot is now aligned over and save the held
+    // pose as that corner (teach_corner captures the CURRENT pose). Do it before
+    // moving the arm again. Repeat align→save for all 4 to define the area.
+    async function saveAlignedCorner(area) {
+      const sel = gEl(area, 'camcap-corner');
+      const corner = sel ? sel.value : 'TL';
+      let r;
+      try { r = await api('/cal/teach_corner', { area, corner }); }
+      catch (e) { setStatus('Server error (is server.py running?)', true); return; }
+      if (r.status === 'success') {
+        setStatus(r.message);
+        if (r.warning) alert('⚠ ' + r.warning);
+        await refreshCalibration();
+      } else {
+        setStatus(r.message || 'Save failed', true);
+      }
+    }
+
+    // Click a point in the live camera image → robot drives that point toward the
+    // tip (image centre). Sends the click as a 0..1 fraction so the server doesn't
+    // need the display size. Click again to fine-tune, then pick the corner + Save.
+    async function armCamClick(e) {
+      const img = e.currentTarget;
+      const rect = img.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      const fx = (e.clientX - rect.left) / rect.width;
+      const fy = (e.clientY - rect.top) / rect.height;
+      setStatus('Moving toward the clicked point…');
+      let r;
+      try { r = await api('/vision/click_move', { fx, fy }); }
+      catch (err) { setStatus('Server error (is server.py running?)', true); return; }
+      setStatus(r.message, r.status !== 'success');
+    }
+
+    // Jog wheel: nudge the arm by the selected step along robot X (forward/back) or
+    // Y (left/right), at the current height, so you can scan around for crosses.
+    async function jogXY(axis, dir) {
+      const stepEl = document.getElementById('jog-step');
+      const step = stepEl ? parseFloat(stepEl.value) : 2;
+      let r;
+      try { r = await api('/jog_xy', { axis, dir, step_mm: step }); }
+      catch (e) { setStatus('Server error (is server.py running?)', true); return; }
+      setStatus(r.message, r.status !== 'success');
+    }
+
+    // Diagnostic: open the serial link only (no torque, no homing) to test whether
+    // merely connecting kills the arm camera, vs the homing current surge.
+    async function connectOnly() {
+      setStatus('Connecting serial only (no torque, no homing)…');
+      let r;
+      try { r = await api('/connect_only', {}); }
+      catch (e) { setStatus('Server error (is server.py running?)', true); return; }
+      setStatus(r.message, r.status !== 'success');
+    }
+
+    // Toggle the live '+' detection overlay so you can see what the detector locks
+    // onto (green dot + FOUND/not-found label) before committing to an auto-map.
+    async function toggleDetect(on) {
+      const r = await api('/vision/detect_mode', { on });
+      setStatus(r.message, r.status !== 'success');
+    }
+
+    // Camera auto-map: refine all 4 already-taught (rough) corners by driving the
+    // arm camera to each '+' cross and locking onto it. Needs a rough rectangle
+    // first (the server rejects it otherwise) so it knows where to look.
+    async function autoMapCamera(area) {
+      if (!areaReady(area)) {
+        setStatus('Lay down a rough rectangle first (2-corner tilt-safe), then camera auto-map.', true);
+        alert('Camera auto-map refines existing corners — it does not search blind.\n\n' +
+              'First map a rough rectangle (e.g. "Complete rectangle from 2 taught corners"), ' +
+              'then run this to lock each corner onto its + cross.');
+        return;
+      }
+      const label = AREAS[area];
+      if (!confirm(`Camera auto-map the ${label} area?\n\nThe arm will drive to each of the 4 rough ` +
+            `corners and use the arm camera to centre on its + cross, then save the exact pose. ` +
+            `Make sure a dark + mark is at each corner and the area is well lit.`)) return;
+      setStatus('Camera auto-mapping — the arm will visit and refine all 4 corners…');
+      let r;
+      try { r = await api('/vision/auto_map_corners', { area, show: true }); }
+      catch (e) { setStatus('Server error (is server.py running?)', true); return; }
+      if (r.status === 'success') {
+        setStatus(r.message);
+        await refreshCalibration();
+      } else {
+        setStatus(r.message || 'Camera auto-map failed', true);
+        alert('Camera auto-map failed:\n\n' + (r.message || 'Unknown error'));
       }
     }
 

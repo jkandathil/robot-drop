@@ -4,7 +4,7 @@ import time
 import math
 import threading
 import json
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 from flask_cors import CORS
 
 # Add parent directory to access andrew_robot
@@ -107,6 +107,16 @@ L1 = 152.13
 L2 = 151.67  
 MAX_REACH = L1 + L2
 MIN_REACH = abs(L1 - L2)
+# Fraction of MAX_REACH past which a mapped corner is flagged "near the reach limit"
+# (skips the auto-visit + warns). MAX_REACH is the FULLY-STRAIGHT reach, where the
+# elbow is at its singularity and the arm can't make radial force - that's the only
+# place it actually stalls. The danger is steep (elbow bend from straight, via law of
+# cosines): 0.99*MAX_REACH (~301 mm) = ~16 deg bent; ~297 mm = ~24 deg; 0.95*MAX_REACH
+# (~289 mm) = ~36 deg and perfectly strong. 0.95 flagged a big band of usable workspace
+# (real plates sit at ~0.93-0.98), so the warning fired on areas the arm reaches fine.
+# Tightened to 0.99 - only corners within ~3 mm of full extension warn now. Genuine stalls past this are caught by the servo overload
+# auto-recovery added 2026-06-13.
+STALL_REACH_FRAC = 0.99
 TICKS_PER_RADIAN = 4096 / (2 * math.pi)
 CENTER_TICK = 2048
 
@@ -232,25 +242,141 @@ def init():
         if not AndrewRobot:
             return jsonify({"status": "error", "message": "dynamixel_sdk not found (mock mode only)"}), 500
         robot = AndrewRobot('D:\\Resources\\andrew.xml', 'COM7', 250000, 'COM8')
-        # The max_speed setter only CAPS speeds (never raises them), so also set the
-        # arm joints' moving_speed directly to actually apply the configured speed.
+        # Init now ONLY connects + energises and sets the working speed - it does NOT
+        # home. The big homing sweep was the current surge that browned out the internal
+        # USB hub and dropped the arm camera, and it isn't needed to start work. Use the
+        # 🏠 Home button (/home) to home on demand. The max_speed setter only CAPS speed,
+        # so set each joint's moving_speed directly too.
         robot.max_speed = ARM_SPEED
         for s in (robot.shoulder, robot.elbow, robot.wrist, robot.linear):
             try:
                 s.moving_speed = ARM_SPEED
             except Exception:
                 pass
-        robot.enable_torque()
-        # Mandatory homing
-        with use_robot():
-            robot.move_arm_servos(linear=robot.SAFE_HEIGHT)
-            time.sleep(0.5)
-            robot.move_arm_servos(shoulder=1100, elbow=1500, wrist=1000)
-            time.sleep(1.5)
-            
-        return jsonify({"status": "success", "message": "Robot Initialized and Homed"})
+        robot.enable_torque()           # hold position; no movement, no homing sweep
+
+        return jsonify({"status": "success",
+                        "message": "Robot connected & holding (no homing). Use 🏠 Home when you "
+                                   "want it to home."})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/connect_only', methods=['POST'])
+def connect_only():
+    """
+    DIAGNOSTIC: open the serial link to the robot ONLY - construct AndrewRobot (opens
+    COM7/COM8) but do NOT enable torque and do NOT home. This isolates the SOFTWARE
+    step (opening the serial ports) from the ELECTRICAL step (servos energising +
+    homing). Test: open the live view, run this, and see if the arm camera survives.
+      - Camera SURVIVES connect-only but DIES on a normal Initialize  -> the cause is
+        the servo current surge (electrical/power), not the app.
+      - Camera DIES on connect-only too -> opening the serial link itself is killing
+        it (a software/USB-enumeration interaction worth digging into).
+    """
+    global robot
+    try:
+        if not AndrewRobot:
+            return jsonify({"status": "error", "message": "dynamixel_sdk not found (mock mode only)"}), 500
+        robot = AndrewRobot('D:\\Resources\\andrew.xml', 'COM7', 250000, 'COM8')
+        return jsonify({"status": "success",
+                        "message": "Serial connected ONLY - no torque, no homing. Check the live view: "
+                                   "is the arm camera still alive? (Then Initialize to compare.)"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/jog_xy', methods=['POST'])
+def jog_xy():
+    """
+    Relative XY jog for the camera click-wheel: nudge the tip by step_mm along the
+    robot's physical X (forward/back) or Y (left/right) at the CURRENT height, so the
+    operator can drive the arm around to scan for '+' crosses while watching the feed.
+    Calibration/teach-time control only (see fine-control-calibration-only).
+    """
+    global vision_running
+    if not robot:
+        return jsonify({"status": "error", "message": "Robot not initialized"}), 400
+    if sequence_running or test_running or vision_running:
+        return jsonify({"status": "error", "message": "Busy: another routine is running"}), 400
+    data = request.json or {}
+    axis = (data.get('axis') or '').lower()
+    if axis not in ('x', 'y'):
+        return jsonify({"status": "error", "message": "axis must be 'x' or 'y'"}), 400
+    try:
+        step = abs(float(data.get('step_mm', 2.0)))
+        d = 1.0 if float(data.get('dir', 1)) >= 0 else -1.0
+    except (TypeError, ValueError):
+        return jsonify({"status": "error", "message": "bad step_mm / dir"}), 400
+    limit = MAX_REACH * STALL_REACH_FRAC
+    try:
+        with use_robot():
+            robot.enable_torque()
+            pos = robot.get_servo_positions()
+            cur_x, cur_y = forward_kinematics(pos[0], pos[1])
+            r_cur = math.hypot(cur_x, cur_y)
+            # Keep the CURRENT arm configuration so a jog never flips the elbow to the
+            # mirror solution (a flip looks like a wild jump / spurious "out of reach").
+            elbow_up = pos[1] >= CENTER_TICK
+            tx_full = cur_x + (step * d if axis == 'x' else 0.0)
+            ty_full = cur_y + (step * d if axis == 'y' else 0.0)
+            r_full = math.hypot(tx_full, ty_full)
+            # --- DIAGNOSTIC LOG (shows the full reachability picture per jog) ---
+            print(f"[jog_xy] axis={axis} dir={d:+.0f} step={step}mm | "
+                  f"ticks(s,e,w,z)=({pos[0]},{pos[1]},{pos[2]},{pos[3]}) elbow_up={elbow_up} | "
+                  f"cur=({cur_x:.1f},{cur_y:.1f}) r={r_cur:.1f} -> "
+                  f"target=({tx_full:.1f},{ty_full:.1f}) r={r_full:.1f} | "
+                  f"reach window [{MIN_REACH:.1f} .. {limit:.1f}] (hard MAX={MAX_REACH:.1f})", flush=True)
+            # Move as far along the requested axis as the model can reach: if the full
+            # step would exceed reach, SHRINK it instead of refusing outright.
+            reached, s = None, step
+            while s >= 0.1:
+                tx = cur_x + (s * d if axis == 'x' else 0.0)
+                ty = cur_y + (s * d if axis == 'y' else 0.0)
+                r = math.hypot(tx, ty)
+                if MIN_REACH + 1.0 < r < limit:
+                    try:
+                        st, et = compute_kinematics(tx, ty, elbow_up=elbow_up)
+                        # Guard the joints the 2-link reach check ignores: shoulder/elbow
+                        # tick range and the elbow's mechanical fold band.
+                        wr = (pos[0] + pos[1] + pos[2]) - st - et   # keep wrist WORLD angle
+                        why = None
+                        if not (TICK_MIN <= st <= TICK_MAX): why = f"shoulder tick {st} out of {TICK_MIN}..{TICK_MAX}"
+                        elif not (ELBOW_TICK_MIN <= et <= ELBOW_TICK_MAX): why = f"elbow tick {et} out of fold band {ELBOW_TICK_MIN}..{ELBOW_TICK_MAX}"
+                        if why is None:
+                            reached = (st, et, s, wr)
+                            print(f"[jog_xy]   -> reachable at {s:g}mm: shoulder={st} elbow={et} wrist={wr}", flush=True)
+                            break
+                        else:
+                            print(f"[jog_xy]   x {s:g}mm r={r:.1f}: {why}", flush=True)
+                    except ValueError as ve:
+                        print(f"[jog_xy]   x {s:g}mm r={r:.1f}: IK rejected ({ve})", flush=True)
+                else:
+                    print(f"[jog_xy]   x {s:g}mm r={r:.1f}: outside reach window", flush=True)
+                s /= 2.0
+            if reached is None:
+                reason = (f"target r={r_full:.0f}mm vs reach window {MIN_REACH:.0f}..{limit:.0f}mm "
+                          f"(arm length {MAX_REACH:.0f}mm). XY comes from shoulder+elbow only; the "
+                          f"wrist/Z cannot extend it.")
+                print(f"[jog_xy] UNREACHABLE: {reason}", flush=True)
+                return jsonify({"status": "error",
+                                "message": f"Out of reach: {reason}",
+                                "diag": {"cur_xy": [round(cur_x, 1), round(cur_y, 1)], "cur_r": round(r_cur, 1),
+                                         "target_xy": [round(tx_full, 1), round(ty_full, 1)], "target_r": round(r_full, 1),
+                                         "min_reach": round(MIN_REACH, 1), "max_reach": round(MAX_REACH, 1),
+                                         "soft_limit": round(limit, 1), "elbow_up": elbow_up,
+                                         "ticks": [pos[0], pos[1], pos[2], pos[3]]}}), 400
+            st, et, smoved, wr = reached
+            settled_move(shoulder=int(st), elbow=int(et))
+            newpos = robot.get_servo_positions()
+        nx, ny = forward_kinematics(newpos[0], newpos[1])
+        sign = '+' if d > 0 else '-'
+        note = "" if abs(smoved - step) < 1e-6 else f" (shortened to {smoved:g} mm by reach)"
+        return jsonify({"status": "success",
+                        "message": f"Jog {axis.upper()}{sign} {smoved:g} mm{note}  →  X={nx:.1f}  Y={ny:.1f} (r={math.hypot(nx,ny):.1f})"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
 
 @app.route('/go', methods=['POST'])
 def go():
@@ -1555,6 +1681,16 @@ TICK_MIN, TICK_MAX = 0, 4095
 # holding position - the usual cause of the "weird sounds" while auto-mapping. The
 # wrist is the most exposed here because its angle is locked across all 4 corners.
 WRIST_STALL_MARGIN = 80
+# Mechanical ELBOW fold limit. The 0..4095 servo range is NOT the real travel: the
+# elbow links collide / hit a hard stop long before the tick extremes, so a point too
+# CLOSE to the base (which needs a very tight fold) is unreachable even though IK
+# returns a valid in-range tick. Measured 2026-06-14: commanding elbow=598 (a ~127 deg
+# bend, for a corner 135 mm from the base) STALLED at 787; elbow=963 reached cleanly.
+# So the usable elbow band is ~[850, 3246] ticks (|bend| <~ 108 deg). teach_rect now
+# rejects any corner whose elbow lands outside this, with a clear "too close to the
+# base" message, instead of silently driving into the stall (the 44 mm-off corner that
+# scrambled the auto-mapped square). Empirical - widen/narrow if the hard stop moves.
+ELBOW_TICK_MIN, ELBOW_TICK_MAX = 850, 3246
 # A taught point is considered repeatable if encoder spread stays within this
 # many ticks across cycles (1 tick ~= 0.088 deg / ~0.08 mm on the linear axis).
 REPEATABILITY_TICK_TOLERANCE = 3
@@ -1689,18 +1825,11 @@ def _validate_pose(pose):
 def bilinear_pose(area, u, v):
     """Interpolate a pose at normalized (u, v) inside an area.
 
-    POSITION (shoulder, elbow) is interpolated in PHYSICAL XY space and then
-    solved with inverse kinematics - NOT by averaging servo ticks. The arm is a
-    2-link mechanism, so blending corner *angles* linearly warps the map: a click
-    at the centre of the canvas could land 7-12 mm off the true physical centre
-    (worse on larger areas). Interpolating the tip's XY keeps (u, v) linear in
-    real space, matching the canvas and the XY-space inverse used elsewhere
-    (_uv_from_xy), so a centre click now goes to the centre.
-
-    WRIST (world angle = shoulder+elbow+wrist) and LINEAR (the taught surface-Z
-    plane) still interpolate linearly in tick space - that is correct for those
-    channels and keeps the pipette's world orientation and the Z plane smooth.
-    At the four corners (u,v in {0,1}) this reproduces the taught ticks exactly.
+    POSITION (shoulder, elbow) is interpolated in TRUE PHYSICAL XY space and then
+    solved with inverse kinematics. The arm is a 2-link mechanism, so blending
+    corner angles linearly warps the map. Furthermore, we must blend in TRUE
+    space (with the correction map removed) rather than RAW space, so that the
+    grid remains perfectly straight.
     """
     c = CALIBRATION[area]['corners']
     TL, TR, BR, BL = c['TL'], c['TR'], c['BR'], c['BL']
@@ -1711,20 +1840,26 @@ def bilinear_pose(area, u, v):
         bot = vals[3] + (vals[2] - vals[3]) * u   # BL -> BR (bottom edge)
         return top + (bot - top) * v
 
-    xys = [forward_kinematics(cc[0], cc[1]) for cc in corners]
-    x = blend([p[0] for p in xys])
-    y = blend([p[1] for p in xys])
+    # Map each corner to TRUE physical space
+    true_xys = []
+    for cc in corners:
+        raw_x, raw_y = forward_kinematics(cc[0], cc[1])
+        cx, cy = get_correction_offset(raw_x, raw_y)
+        true_xys.append((raw_x - cx, raw_y - cy))
+
+    # Interpolate in TRUE space
+    x = blend([p[0] for p in true_xys])
+    y = blend([p[1] for p in true_xys])
+    
     world = blend([cc[0] + cc[1] + cc[2] for cc in corners])
     linear = blend([cc[3] for cc in corners])
 
-    # Match the elbow configuration the corners were taught in (a valid rectangle
-    # shares one config; the average decides cleanly even with a stray corner).
     elbow_up = (TL[1] + TR[1] + BR[1] + BL[1]) / 4.0 >= CENTER_TICK
     try:
-        s, e = compute_kinematics(x, y, elbow_up=elbow_up)
+        # Map back from TRUE space to raw ticks using inverse_kinematics
+        s, e = inverse_kinematics(x, y, elbow_up=elbow_up)
     except ValueError:
-        # Out of reach / degenerate corners: fall back to the old tick blend so we
-        # never raise here. _area_quad_health() rejects bad rectangles upstream.
+        # Fall back to raw tick blend if out of reach
         return [int(round(blend([cc[0] for cc in corners]))),
                 int(round(blend([cc[1] for cc in corners]))),
                 int(round(blend([cc[2] for cc in corners]))),
@@ -1857,7 +1992,8 @@ def _corners_xy(area):
     for k in CORNERS:
         if c.get(k) is not None:
             raw_x, raw_y = forward_kinematics(c[k][0], c[k][1])
-            cx, cy = get_correction_offset(raw_x, raw_y)
+            cx_guess, cy_guess = get_correction_offset(raw_x, raw_y)
+            cx, cy = get_correction_offset(raw_x - cx_guess, raw_y - cy_guess)
             x = raw_x - cx
             y = raw_y - cy
             out[k] = {"x": round(x, 2), "y": round(y, 2)}
@@ -2025,7 +2161,8 @@ def _fit_wells_to_area(well_locs, scale):
     pts = []
     for l in well_locs:
         raw_x, raw_y = forward_kinematics(l['pos'][0], l['pos'][1])
-        cx, cy = get_correction_offset(raw_x, raw_y)
+        cx_guess, cy_guess = get_correction_offset(raw_x, raw_y)
+        cx, cy = get_correction_offset(raw_x - cx_guess, raw_y - cy_guess)
         pts.append((raw_x - cx, raw_y - cy))
     
     pcx = sum(p[0] for p in pts) / len(pts)
@@ -2158,8 +2295,10 @@ def cal_teach_rect():
         with use_robot():
             taught = _capture_pose()
         raw_px, raw_py = forward_kinematics(taught[0], taught[1])
-        # Convert raw physical coordinates to true physical coordinates
-        cx0, cy0 = get_correction_offset(raw_px, raw_py)
+        # Convert raw physical coordinates to true physical coordinates.
+        # get_correction_offset expects TRUE coordinates, so we do a 1-step iteration:
+        cx_guess, cy_guess = get_correction_offset(raw_px, raw_py)
+        cx0, cy0 = get_correction_offset(raw_px - cx_guess, raw_py - cy_guess)
         px0 = raw_px - cx0
         py0 = raw_py - cy0
         
@@ -2185,8 +2324,12 @@ def cal_teach_rect():
                'TR': (wdx * width, wdy * width),
                'BL': (hdx * height, hdy * height),
                'BR': (wdx * width + hdx * height, wdy * width + hdy * height)}
+        # off[name] is the displacement FROM TL to that corner, so to recover TL from
+        # the corner the operator actually taught we SUBTRACT its offset. (Using + here
+        # mirrored every non-TL teach across the taught point - the wrong-rectangle bug.
+        # TL itself has off=(0,0), which is why only TL teaches ever looked correct.)
         ox, oy = off[corner_at]
-        tlx, tly = px0 + ox, py0 + oy
+        tlx, tly = px0 - ox, py0 - oy
         phys = {'TL': (tlx, tly),
                 'TR': (tlx + wdx * width, tly + wdy * width),
                 'BL': (tlx + hdx * height, tly + hdy * height),
@@ -2212,6 +2355,18 @@ def cal_teach_rect():
                 return jsonify({"status": "error",
                                 "message": f"Corner {name} needs shoulder/elbow values outside the servo "
                                            f"range. Reduce the rectangle or teach from a different corner."}), 400
+            # Elbow MECHANICAL fold limit (tighter than the raw tick range): a corner
+            # too close to the base needs a fold the elbow physically can't make, so
+            # IK returns an in-range tick the arm then STALLS trying to reach. Catch it
+            # here instead of drawing that corner 40+ mm off (see ELBOW_TICK_MIN/MAX).
+            if not (ELBOW_TICK_MIN <= fex <= ELBOW_TICK_MAX):
+                r = math.hypot(px, py)
+                return jsonify({"status": "error",
+                                "message": f"Corner {name} is only {r:.0f} mm from the base — too close to "
+                                           f"reach: the elbow would have to fold to {int(fex)} ticks, past its "
+                                           f"mechanical stop (safe band {ELBOW_TICK_MIN}..{ELBOW_TICK_MAX}). "
+                                           f"Move the area FORWARD (away from the base), make it smaller, or "
+                                           f"teach from the corner nearest the base instead of {corner_at}."}), 400
             # Keep the (locked) wrist clear of its hard travel stops, not just inside
             # the raw 0..4095 range - a wrist jammed at an end-stop stalls and buzzes.
             if not (TICK_MIN + WRIST_STALL_MARGIN <= wr <= TICK_MAX - WRIST_STALL_MARGIN):
@@ -2227,7 +2382,7 @@ def cal_teach_rect():
         # weakest at full extension, so the arm can STALL (overload) reaching them -
         # the usual cause of the grinding/buzzing while auto-mapping or running there.
         # Computed BEFORE the visit so we never physically drive into a stall.
-        safe_reach = MAX_REACH * 0.95
+        safe_reach = MAX_REACH * STALL_REACH_FRAC
         near = sorted(n for n, (px, py) in phys.items() if math.hypot(px, py) > safe_reach)
         reach_warn = None
         if near:
@@ -2275,11 +2430,15 @@ def cal_complete_rect():
     TILT-AWARE rectangle mapping from TWO taught ADJACENT corners. /cal/teach_rect
     derives 3 corners from 1 and ASSUMES the plate is square to the robot's base, so
     a rotated plate gets phantom corners flung off-axis (often "out of reach"). This
-    instead reads two adjacent corners the operator already taught, measures the TRUE
-    edge angle between them, and builds a perfect rectangle ALONG that angle - so a
-    plate at any rotation maps correctly. Workflow: teach two adjacent corners
-    (e.g. TL then TR) with the normal corner buttons, enter the perpendicular size,
-    then call this.
+    instead reads two adjacent corners the operator already taught and uses them for
+    the edge DIRECTION (angle) ONLY - the first taught corner is the anchor and the
+    entered width x height set the actual SIZE. The raw gap between the two taught
+    points does NOT size the rectangle: teaching corners 100 mm apart but asking for
+    50 still yields a true 50 mm edge (only its angle is taken from the two points).
+    This matches the size the operator typed; pinning BOTH taught points instead made
+    the rectangle inherit the gap (a 100x50 box from a 50x50 request - the bug this
+    fixes). Workflow: teach two adjacent corners (e.g. TL then TR) with the normal
+    corner buttons to show the edge angle, enter width x height, then call this.
     """
     if not robot:
         return jsonify({"status": "error", "message": "Robot not initialized"}), 400
@@ -2315,7 +2474,8 @@ def cal_complete_rect():
 
         def true_xy(pose):
             rx, ry = forward_kinematics(pose[0], pose[1])
-            cx, cy = get_correction_offset(rx, ry)
+            cx_guess, cy_guess = get_correction_offset(rx, ry)
+            cx, cy = get_correction_offset(rx - cx_guess, ry - cy_guess)
             return (rx - cx, ry - cy)
         A_xy, B_xy = true_xy(src[A]), true_xy(src[B])
         ex, ey = B_xy[0] - A_xy[0], B_xy[1] - A_xy[1]
@@ -2327,7 +2487,7 @@ def cal_complete_rect():
 
         # Taught edge is the width edge for {TL,TR}/{BL,BR}, else the height edge.
         is_horiz = frozenset((A, B)) in ({frozenset(('TL', 'TR')), frozenset(('BL', 'BR'))})
-        edge_dim = width if is_horiz else height     # what the taught edge should measure
+        edge_dim = width if is_horiz else height     # entered length of the taught edge
         perp_dim = height if is_horiz else width     # how far the rectangle extends perpendicular
 
         def other_neighbour(c, notc):
@@ -2336,36 +2496,43 @@ def cal_complete_rect():
             return n1 if n2 == notc else n2
         A2, B2 = other_neighbour(A, B), other_neighbour(B, A)
 
+        # The two taught corners fix only the edge DIRECTION + the anchor A; the edge
+        # LENGTH is the size the operator entered, NOT the raw gap between the points.
+        # B is re-projected to A + edge_dim along the taught direction so a sloppy or
+        # over-long second teach (e.g. 100 mm apart when 50 was wanted) still yields the
+        # requested size. Pinning B at its taught spot made the box inherit that gap.
+        ux, uy = ex / edge_len, ey / edge_len
+        B_fixed = (A_xy[0] + ux * edge_dim, A_xy[1] + uy * edge_dim)
+
         # Perpendicular unit vector has two choices; pick the one that makes the full
         # TL->TR->BR->BL outline wind CLOCKWISE (negative signed area) - the same
         # canonical orientation teach_rect builds - so the rectangle lands on the
         # correct side no matter which edge was taught or how the plate is rotated.
-        ux, uy = ex / edge_len, ey / edge_len
-
         def shoelace(pts):
             return sum(pts[i][0] * pts[(i + 1) % 4][1] - pts[(i + 1) % 4][0] * pts[i][1]
                        for i in range(4))
         chosen = None
         for sign in (1.0, -1.0):
             px, py = -uy * sign, ux * sign
-            pos = {A: A_xy, B: B_xy,
+            pos = {A: A_xy, B: B_fixed,
                    A2: (A_xy[0] + px * perp_dim, A_xy[1] + py * perp_dim),
-                   B2: (B_xy[0] + px * perp_dim, B_xy[1] + py * perp_dim)}
+                   B2: (B_fixed[0] + px * perp_dim, B_fixed[1] + py * perp_dim)}
             if shoelace([pos[c] for c in cyc]) < 0:
                 chosen = pos
                 break
         if chosen is None:
             chosen = pos
 
-        # Taught corners keep their EXACT pose; derived corners use IK with the elbow
-        # config + locked wrist world-angle taken from taught corner A.
+        # Only the ANCHOR A keeps its exact taught pose; the other three (including B,
+        # which is now re-projected to the entered length) use IK with the elbow config
+        # + locked wrist world-angle taken from anchor A so all four share one config.
         aP = src[A]
         elbow_up = aP[1] >= CENTER_TICK
         w_world = aP[0] + aP[1] + aP[2]
         z_lin = aP[3]
         corners = {}
         for name in cyc:
-            if name in (A, B):
+            if name == A:
                 corners[name] = [int(v) for v in src[name]]
                 continue
             cx_, cy_ = chosen[name]
@@ -2379,6 +2546,15 @@ def cal_complete_rect():
             if not (TICK_MIN <= fsx <= TICK_MAX and TICK_MIN <= fex <= TICK_MAX):
                 return jsonify({"status": "error",
                                 "message": f"Derived corner {name} needs shoulder/elbow outside the servo range."}), 400
+            # Elbow mechanical fold limit - a corner too close to the base is unreachable
+            # even with an in-range IK tick (see ELBOW_TICK_MIN/MAX and teach_rect).
+            if not (ELBOW_TICK_MIN <= fex <= ELBOW_TICK_MAX):
+                r = math.hypot(*chosen[name])
+                return jsonify({"status": "error",
+                                "message": f"Derived corner {name} is only {r:.0f} mm from the base — too close "
+                                           f"to reach (elbow would fold to {int(fex)} ticks, past its stop "
+                                           f"{ELBOW_TICK_MIN}..{ELBOW_TICK_MAX}). Move the plate forward or use "
+                                           f"a smaller area."}), 400
             if not (TICK_MIN + WRIST_STALL_MARGIN <= wr <= TICK_MAX - WRIST_STALL_MARGIN):
                 return jsonify({"status": "error",
                                 "message": f"Derived corner {name} would jam the wrist ({int(wr)} ticks). Keep "
@@ -2386,7 +2562,7 @@ def cal_complete_rect():
             corners[name] = [int(fsx), int(fex), int(round(wr)), int(z_lin)]
 
         phys = {k: chosen[k] for k in cyc}
-        safe_reach = MAX_REACH * 0.95
+        safe_reach = MAX_REACH * STALL_REACH_FRAC
         near = sorted(n for n in cyc if math.hypot(*phys[n]) > safe_reach)
         reach_warn = None
         if near:
@@ -3315,61 +3491,273 @@ def get_brightest_dot(frame):
     return (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"])), thresh
 
 
-def _open_arm_camera():
+def get_cross_center(frame):
     """
-    Open ONLY the configured arm-camera index. We deliberately do NOT scan other
-    indices - on a two-camera rig that is exactly how the wrong (volume) camera
-    gets grabbed. If the configured index is wrong, use the camera picker to find
-    and save the right one.
+    Centre (cx, cy) of a DARK cross / pen mark on a LIGHT surface, plus the
+    threshold image. Used by the camera auto-mapper: after the arm moves to a
+    rough corner the cross sits near the middle of the frame, so we pick the dark
+    blob NEAREST the image centre (not the largest) - that rejects the plate edge,
+    shadows, and any second mark that happens to creep into view.
+
+    Otsu picks the dark/light split per-frame so it adapts to lighting instead of a
+    hard-coded threshold; a small morphological close re-joins the two strokes of a
+    thin '+' into one contour so the centroid lands on the crossing point.
     """
     import cv2
-    cap = cv2.VideoCapture(ARM_CAMERA_INDEX, cv2.CAP_DSHOW)
+    import numpy as np
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    # Dark-on-light: THRESH_BINARY_INV makes the mark white; Otsu adapts the cut.
+    _, thresh = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    thresh = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, np.ones((3, 3), np.uint8))
+    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    h, w = gray.shape[:2]
+    icx, icy = w / 2.0, h / 2.0
+    best, best_d = None, None
+    for c in contours:
+        a = cv2.contourArea(c)
+        if a < VISION_MIN_AREA:        # dust / speckle
+            continue
+        if a > 0.25 * w * h:           # whole-frame shadow or vignette, not a mark
+            continue
+        M = cv2.moments(c)
+        if M["m00"] == 0:
+            continue
+        px, py = M["m10"] / M["m00"], M["m01"] / M["m00"]
+        d = math.hypot(px - icx, py - icy)
+        if best_d is None or d < best_d:
+            best_d, best = d, (int(px), int(py))
+    return best, thresh
+
+
+# NOTE: we deliberately do NOT force MJPG / a fixed resolution on the capture.
+# Forcing MJPG @ 640x480 made this Logitech deliver a mis-decoded frame - the image
+# came through split down the middle with one half rotated 180 deg (a format/stride
+# mismatch). Opening the camera at its NATIVE default (as the original code did)
+# decodes cleanly. _configure_cap is now a no-op kept only so existing call sites
+# don't change; if two cameras ever need to share the hub we'll revisit bandwidth
+# with a format the device actually supports cleanly.
+def _configure_cap(cap):
+    return
+
+
+def _camera_names():
+    """
+    DirectShow device names in CAP_DSHOW index order (so names line up with indices),
+    via pygrabber if installed. Returns [] if unavailable - names are a nicety for the
+    picker, never required.
+    """
+    try:
+        from pygrabber.dshow_graph import FilterGraph
+        return list(FilterGraph().get_input_devices())
+    except Exception:
+        return []
+
+
+def _open_capture(index):
+    """
+    Open `index` with the low-bandwidth MJPG profile via DirectShow, returning an
+    opened cap that actually DELIVERS a frame, or None ("opens but no frame" is the
+    shared-hub bandwidth failure, so we verify a real grab first).
+
+    DirectShow ONLY - deliberately NOT the MSMF backend. MSMF blocks for a long time
+    on a flaky/absent USB index (it can't time out cleanly), which wedged the whole
+    dev server during camera probes. Both robot Logitech cams enumerate fine under
+    DSHOW, so MSMF bought nothing but hangs.
+    """
+    import cv2
+    try:
+        cap = cv2.VideoCapture(index, cv2.CAP_DSHOW)
+    except Exception:
+        return None
     if cap.isOpened():
-        return cap, ARM_CAMERA_INDEX
+        _configure_cap(cap)
+        for _ in range(6):
+            ok, f = cap.read()
+            if ok and f is not None:
+                return cap
+            time.sleep(0.05)
     cap.release()
+    return None
+
+
+def _open_arm_camera():
+    """
+    Open ONLY the configured arm-camera index (now MJPG + backend fallback). We
+    deliberately do NOT scan other indices - on a two-camera rig that is exactly how
+    the wrong (volume) camera gets grabbed. If the configured index is wrong, use the
+    camera picker ('Detect cameras') to find and save the right one.
+    """
+    cap = _open_capture(ARM_CAMERA_INDEX)
+    if cap is not None:
+        return cap, ARM_CAMERA_INDEX
     return None, None
 
 
-def camera_center(show=True, deadband=VISION_DEADBAND_PX, timeout=VISION_TIMEOUT_S):
+# ---- Shared arm-camera streamer ------------------------------------------------
+# A SINGLE VideoCapture shared by the live MJPEG view AND the servoing loop. Only
+# one process can hold a camera, so both consumers pull from one ref-counted grab
+# thread instead of each opening the device (which is how the wrong camera, or a
+# "device busy", used to happen). The grab thread also paints the centre crosshair
+# and the detected mark onto each frame, so the live view shows what the detector
+# sees and the operator can watch camera_center() lock onto a cross in real time.
+_cam_lock = threading.Lock()
+_cam_cap = None
+_cam_thread = None
+_cam_run = False
+_cam_users = 0
+_cam_raw = None        # latest raw BGR frame (for detection)
+_cam_jpeg = None       # latest annotated JPEG bytes (for the MJPEG stream)
+_cam_overlay = None    # {'dot': (x,y)|None, 'label': str} drawn onto the live view
+_cam_detect = False    # when True, the live feed continuously shows '+' detection
+
+
+def _cam_grab_loop():
+    import cv2
+    global _cam_raw, _cam_jpeg, _cam_cap
+    fails = 0
+    while _cam_run and _cam_cap is not None:
+        try:
+            ok, frame = _cam_cap.read()
+        except Exception:
+            ok, frame = False, None
+        if not ok or frame is None:
+            # The feed died - almost always the arm camera dropping off the bus when
+            # the robot init/homing surge browns out the internal USB hub. Instead of
+            # going dark forever (old behaviour: break, needs an app restart), keep
+            # trying to REOPEN it so the live view resumes by itself the moment the
+            # camera re-enumerates - no unplug/replug needed.
+            fails += 1
+            _cam_jpeg = None
+            if fails >= 30 and _cam_run:        # ~1 s of dead frames → try to reopen
+                try:
+                    _cam_cap.release()
+                except Exception:
+                    pass
+                newcap = _open_capture(ARM_CAMERA_INDEX)
+                if newcap is not None:
+                    _cam_cap = newcap
+                    fails = 0
+                else:
+                    time.sleep(0.7)             # still gone; back off and retry
+            else:
+                time.sleep(0.03)
+            continue
+        fails = 0
+        _cam_raw = frame
+        try:
+            disp = frame.copy()
+            h, w = disp.shape[:2]
+            cx, cy = w // 2, h // 2
+            cv2.drawMarker(disp, (cx, cy), (0, 0, 255), cv2.MARKER_CROSS, 22, 2)
+            # During auto-map, camera_center owns the overlay. Otherwise, if the
+            # operator turned on '+ detection', run the cross detector live so they
+            # can see exactly what (if anything) it locks onto and reposition/tune.
+            ov = _cam_overlay
+            if _cam_detect and not vision_running:
+                try:
+                    dot, _th = get_cross_center(frame)
+                    ov = {'dot': dot, 'label': '+ FOUND' if dot else '+ not found'}
+                except Exception:
+                    ov = _cam_overlay
+            if ov:
+                if ov.get('dot'):
+                    cv2.circle(disp, tuple(ov['dot']), 8, (0, 255, 0), -1)
+                    cv2.line(disp, (cx, cy), tuple(ov['dot']), (255, 0, 0), 2)
+                if ov.get('label'):
+                    cv2.putText(disp, ov['label'], (8, 26), cv2.FONT_HERSHEY_SIMPLEX,
+                                0.7, (0, 255, 255), 2)
+            ok2, buf = cv2.imencode('.jpg', disp)
+            if ok2:
+                _cam_jpeg = buf.tobytes()
+        except Exception:
+            pass
+        time.sleep(0.03)
+
+
+def cam_acquire():
+    """Open the arm camera + start the grab thread if not already running. Ref-counted."""
+    global _cam_cap, _cam_thread, _cam_run, _cam_users
+    with _cam_lock:
+        if _cam_cap is None:
+            cap = _open_capture(ARM_CAMERA_INDEX)   # MJPG + DSHOW/MSMF, frame-verified
+            if cap is None:
+                raise RuntimeError(
+                    f"Arm camera index {ARM_CAMERA_INDEX} did not open (or gave no frame). "
+                    f"The robot's two cameras share one internal USB 2.0 hub - power-cycle "
+                    f"the robot to re-enumerate them, then use 'Detect cameras' to pick the "
+                    f"right index.")
+            _cam_cap = cap
+            _cam_run = True
+            _cam_thread = threading.Thread(target=_cam_grab_loop, daemon=True)
+            _cam_thread.start()
+        _cam_users += 1
+
+
+def cam_release():
+    """Drop one user; close the device when the last consumer leaves."""
+    global _cam_cap, _cam_run, _cam_users, _cam_overlay
+    with _cam_lock:
+        _cam_users = max(0, _cam_users - 1)
+        if _cam_users == 0:
+            _cam_run = False
+            cap, _cam_cap, _cam_overlay = _cam_cap, None, None
+            if cap is not None:
+                try:
+                    cap.release()
+                except Exception:
+                    pass
+
+
+def cam_read_raw():
+    return _cam_raw
+
+
+def cam_set_overlay(ov):
+    global _cam_overlay
+    _cam_overlay = ov
+
+
+def camera_center(show=True, deadband=VISION_DEADBAND_PX, timeout=VISION_TIMEOUT_S,
+                  detect=None):
     """
-    Servo the shoulder/elbow until the brightest dot is centred under the camera.
+    Servo the shoulder/elbow until the target fiducial is centred under the camera.
     Caller holds the robot lock. Returns a dict with success / residual_px / pose
     / captured tick pose. Reuses the prototype's proportional control verbatim.
+
+    `detect(frame) -> ((cx, cy) | None, thresh_img)` locates the fiducial; defaults
+    to get_brightest_dot (bright dot). The camera auto-mapper passes get_cross_center
+    to lock onto a dark '+' mark instead.
+
+    Frames now come from the SHARED streamer (cam_acquire/cam_read_raw) so the live
+    MJPEG view shows exactly what the detector sees - the old cv2.imshow window was
+    unreliable from a Flask worker thread (it often never appeared). `show` is kept
+    for call compatibility but is ignored; watch the in-UI live view instead.
     """
-    import cv2
     global vision_running
-    cap, idx = _open_arm_camera()
-    if cap is None:
-        raise RuntimeError("Arm camera not found - set 'arm_camera_index' in settings.json")
+    if detect is None:
+        detect = get_brightest_dot
+    cam_acquire()
 
     # Start from the arm's current XY (via forward kinematics) and nudge from there.
     pos = robot.get_servo_positions()
     cur_x, cur_y = forward_kinematics(pos[0], pos[1])
     start = time.time()
     residual = None
-    win = "Arm Camera - Calibration"
-    can_show = show
     try:
         while time.time() - start < timeout:
             if not vision_running:
                 break
-            ret, frame = cap.read()
-            if not ret:
+            frame = cam_read_raw()
+            if frame is None:
+                time.sleep(0.03)
                 continue
             h, w = frame.shape[:2]
             cx, cy = w // 2, h // 2
-            dot, thresh = get_brightest_dot(frame)
-            if can_show:
-                try:
-                    cv2.drawMarker(frame, (cx, cy), (0, 0, 255), cv2.MARKER_CROSS, 20, 2)
-                    if dot:
-                        cv2.circle(frame, dot, 8, (0, 255, 0), -1)
-                        cv2.line(frame, (cx, cy), dot, (255, 0, 0), 2)
-                    cv2.imshow(win, frame)
-                    cv2.waitKey(1)
-                except Exception:
-                    can_show = False   # headless fallback if no display surface
+            dot, thresh = detect(frame)
+            cam_set_overlay({'dot': dot, 'label': 'centering'})
             if not dot:
+                time.sleep(0.03)
                 continue
             err_x, err_y = dot[0] - cx, dot[1] - cy
             if math.hypot(err_x, err_y) <= deadband:
@@ -3388,15 +3776,11 @@ def camera_center(show=True, deadband=VISION_DEADBAND_PX, timeout=VISION_TIMEOUT
             time.sleep(0.05)
         time.sleep(0.3)                       # let the last nudge settle
         pose = _capture_pose()
+        cam_set_overlay({'dot': None, 'label': 'centred' if residual is not None else 'no mark'})
         return {"success": residual is not None, "residual_px": residual,
-                "camera_index": idx, "pose": pose}
+                "camera_index": ARM_CAMERA_INDEX, "pose": pose}
     finally:
-        cap.release()
-        if show:
-            try:
-                cv2.destroyWindow(win)
-            except Exception:
-                pass
+        cam_release()
 
 
 @app.route('/vision/center', methods=['POST'])
@@ -3425,7 +3809,15 @@ def vision_center_endpoint():
 
 @app.route('/vision/refine_corner', methods=['POST'])
 def vision_refine_corner():
-    """Camera-centre on a corner's fiducial, then store that camera-accurate pose."""
+    """
+    Camera-capture ONE corner: jog the arm so that corner's '+' cross is roughly under
+    the camera, call this with the corner name, and the arm fine-centres on the cross
+    NEAREST the image centre (get_cross_center), then stores that exact pose as the
+    corner. Repeat for TL/TR/BR/BL to define the whole area from the marks - NO rough
+    rectangle needed (unlike /vision/auto_map_corners, which refines an existing map).
+    The 'nearest centre' rule is why several crosses can be in frame at once: it locks
+    onto the one you jogged to, ignoring the others.
+    """
     global vision_running
     if not robot:
         return jsonify({"status": "error", "message": "Robot not initialized"}), 400
@@ -3442,15 +3834,20 @@ def vision_refine_corner():
     try:
         with use_robot():
             robot.enable_torque()
-            result = camera_center(show=bool(data.get('show', True)))
+            result = camera_center(show=bool(data.get('show', True)), detect=get_cross_center)
         if not result["success"]:
             return jsonify({"status": "error",
-                            "message": "Could not centre on the fiducial - check lighting/dot"}), 400
+                            "message": "Could not centre on the + cross - jog so it's nearer the "
+                                       "centre of the view, or check lighting/contrast."}), 400
         CALIBRATION[area]['corners'][corner] = result["pose"]
         moved = reproject_targets()
         save_calibration()
-        msg = f"Refined {area} corner {corner} by camera (residual {result['residual_px']} px)"
-        if moved:
+        have = [k for k in CORNERS if CALIBRATION[area]['corners'].get(k) is not None]
+        msg = (f"Captured {area} corner {corner} by camera (residual {result['residual_px']} px) "
+               f"- {len(have)}/4 corners set")
+        if _area_ready(area):
+            msg += " ✓ area defined"
+        elif moved:
             msg += f", re-aligned {moved} target(s)"
         return jsonify({"status": "success", "message": msg,
                         "pose": result["pose"], "ready": _area_ready(area)})
@@ -3458,6 +3855,212 @@ def vision_refine_corner():
         return jsonify({"status": "error", "message": str(e)}), 500
     finally:
         vision_running = False
+
+
+@app.route('/vision/align_cross', methods=['POST'])
+def vision_align_cross():
+    """
+    Drive the arm to ALIGN on the nearest '+' cross and STOP there, WITHOUT saving.
+    This is the "robot goes to the cross by itself, then you confirm which corner it
+    is" flow: the operator points the camera roughly at a cross (it can be anywhere in
+    view - the detector locks onto the one nearest the centre), clicks align, the arm
+    servos until the cross sits under the tip, and stays there. The UI then asks which
+    corner this is and saves the held pose via /cal/teach_corner. Unlike refine_corner,
+    the corner is chosen AFTER the move, so the operator confirms what they see.
+    """
+    global vision_running
+    if not robot:
+        return jsonify({"status": "error", "message": "Robot not initialized"}), 400
+    if sequence_running or test_running or vision_running:
+        return jsonify({"status": "error", "message": "Busy: another routine is running"}), 400
+    data = request.json or {}
+    area = data.get('area', 'substrate')
+    if area not in ('substrate', 'reagent'):
+        return jsonify({"status": "error", "message": "Unknown area"}), 400
+    vision_running = True
+    try:
+        with use_robot():
+            robot.enable_torque()
+            result = camera_center(show=bool(data.get('show', True)), detect=get_cross_center)
+        if not result["success"]:
+            return jsonify({"status": "error",
+                            "message": "No + cross found to align to - aim the camera so a cross is "
+                                       "in view (it locks onto the one nearest the centre)."}), 400
+        return jsonify({"status": "success",
+                        "message": f"Aligned on a + cross (residual {result['residual_px']} px) - "
+                                   f"now pick which corner this is and Save.",
+                        "pose": result["pose"], "residual_px": result["residual_px"]})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+    finally:
+        vision_running = False
+
+
+@app.route('/vision/click_move', methods=['POST'])
+def vision_click_move():
+    """
+    CLICK-TO-CENTRE: the operator clicks a point (e.g. a '+' cross) in the live view
+    and the arm moves so that point shifts toward the image centre - i.e. under the
+    tip. Detection-free: the operator picks the exact target by clicking, so it works
+    even when the auto-detector struggles. Open-loop per click (uses the camera's
+    hand-eye scale); click again to fine-tune, then Save the held pose as a corner.
+
+    Inputs fx, fy are the click position as a FRACTION (0..1) of the displayed image,
+    so the frontend doesn't need to know the true frame resolution.
+    """
+    global vision_running
+    if not robot:
+        return jsonify({"status": "error", "message": "Robot not initialized"}), 400
+    if sequence_running or test_running or vision_running:
+        return jsonify({"status": "error", "message": "Busy: another routine is running"}), 400
+    data = request.json or {}
+    try:
+        fx = min(max(float(data['fx']), 0.0), 1.0)
+        fy = min(max(float(data['fy']), 0.0), 1.0)
+    except (KeyError, TypeError, ValueError):
+        return jsonify({"status": "error", "message": "Need fx, fy (0..1 click position)"}), 400
+    frame = cam_read_raw()
+    h, w = (frame.shape[0], frame.shape[1]) if frame is not None else (480, 640)
+    err_x = (fx - 0.5) * w        # +ve = clicked right of centre
+    err_y = (fy - 0.5) * h        # +ve = clicked below centre
+    # Same hand-eye mapping as camera_center (camera mounted rotated 90 deg):
+    # y-pixel error -> physical X, x-pixel error -> physical Y, scaled by mm-per-pixel.
+    dx = -err_y * VISION_KP
+    dy = err_x * VISION_KP
+    MAX_CLICK_MM = 40.0           # safety clamp on a single click move
+    dx = max(min(dx, MAX_CLICK_MM), -MAX_CLICK_MM)
+    dy = max(min(dy, MAX_CLICK_MM), -MAX_CLICK_MM)
+    vision_running = True
+    try:
+        with use_robot():
+            robot.enable_torque()
+            pos = robot.get_servo_positions()
+            cur_x, cur_y = forward_kinematics(pos[0], pos[1])
+            try:
+                st, et = compute_kinematics(cur_x + dx, cur_y + dy)
+            except ValueError:
+                return jsonify({"status": "error",
+                                "message": "That point is out of reach from here - move the arm "
+                                           "closer first, or click nearer the centre."}), 400
+            settled_move(shoulder=int(st), elbow=int(et))
+        moved = math.hypot(dx, dy)
+        return jsonify({"status": "success",
+                        "message": f"Moved {moved:.1f} mm toward the clicked point - click again to "
+                                   f"fine-tune, then pick the corner and Save.",
+                        "dx": round(dx, 1), "dy": round(dy, 1)})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+    finally:
+        vision_running = False
+
+
+@app.route('/vision/auto_map_corners', methods=['POST'])
+def vision_auto_map_corners():
+    """
+    CAMERA AUTO-MAP: walk all four corners and lock each onto its '+' cross mark.
+
+    Workflow (the operator chose "rough map first, then refine"): the area must
+    ALREADY have an approximate rectangle (e.g. from /cal/complete_rect), so we know
+    roughly where each cross is. For TL, TR, BR, BL we move to the rough pose at its
+    own (surface) height - move_to_pose lifts to SAFE_HEIGHT first, so we never drag
+    across the deck - then camera_center() nudges the shoulder/elbow until the dark
+    cross sits under the lens and we capture that pose. The captured pose keeps the
+    rough corner's wrist and Z untouched (camera_center only drives shoulder/elbow),
+    so the taught surface plane is preserved while XY becomes camera-accurate.
+
+    All four must succeed before anything is saved: a partial map (some corners
+    camera-accurate, some still rough) would silently warp the whole interpolation,
+    so on any miss we abort and leave the existing rough map intact.
+    """
+    global vision_running
+    if not robot:
+        return jsonify({"status": "error", "message": "Robot not initialized"}), 400
+    if sequence_running or test_running or vision_running:
+        return jsonify({"status": "error", "message": "Busy: another routine is running"}), 400
+    data = request.json or {}
+    area = data.get('area', 'substrate')
+    if area not in ('substrate', 'reagent'):
+        return jsonify({"status": "error", "message": "Unknown area"}), 400
+    if not _area_ready(area):
+        return jsonify({"status": "error",
+                        "message": "Lay down a rough rectangle first (e.g. the 2-corner "
+                                   "tilt-safe map), then run camera auto-map - it refines "
+                                   "the existing corners, it doesn't search blind."}), 400
+    show = bool(data.get('show', True))
+    rough = {k: list(CALIBRATION[area]['corners'][k]) for k in CORNERS}
+    refined = {}
+    results = {}
+    vision_running = True
+    try:
+        with use_robot():
+            robot.enable_torque()
+            for corner in CORNERS:
+                if not vision_running:                    # /vision/stop pressed mid-run
+                    return jsonify({"status": "error",
+                                    "message": f"Stopped before {corner} (no changes saved)"}), 400
+                move_to_pose(rough[corner], two_stage=True, settle=0.2)
+                res = camera_center(show=show, detect=get_cross_center)
+                results[corner] = res.get("residual_px")
+                if not res["success"]:
+                    return jsonify({"status": "error",
+                                    "message": f"Could not centre on the {corner} cross "
+                                               f"(check the mark is in view / lit). No changes saved.",
+                                    "residuals": results}), 400
+                refined[corner] = res["pose"]
+        # All four locked - commit together.
+        CALIBRATION[area]['corners'] = {k: [int(v) for v in refined[k]] for k in CORNERS}
+        moved = reproject_targets()
+        save_calibration()
+        worst = max((r for r in results.values() if r is not None), default=None)
+        msg = f"Camera auto-mapped all 4 {area} corners (worst residual {worst} px)"
+        if moved:
+            msg += f"; re-aligned {moved} target(s)"
+        return jsonify({"status": "success", "message": msg, "residuals": results,
+                        "corners_xy": _corners_xy(area), "ready": _area_ready(area)})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+    finally:
+        vision_running = False
+
+
+@app.route('/vision/stream')
+def vision_stream():
+    """
+    Live MJPEG feed of the arm camera, for an <img src="/vision/stream"> in the UI.
+    Shares the one camera via cam_acquire/cam_release, so the operator can watch the
+    feed AND run camera auto-map at the same time (the auto-map paints its crosshair
+    + detected mark onto these same frames). The generator releases the camera when
+    the browser closes the <img>, so the device frees up automatically.
+    """
+    try:
+        cam_acquire()
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+    def gen():
+        try:
+            while True:
+                jpg = _cam_jpeg
+                if jpg is not None:
+                    yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + jpg + b'\r\n')
+                time.sleep(0.05)
+        finally:
+            cam_release()
+
+    return Response(gen(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+
+@app.route('/vision/detect_mode', methods=['POST'])
+def vision_detect_mode():
+    """Toggle live '+' cross detection on the feed, so the operator can see whether
+    (and where) the detector locks on before running auto-map."""
+    global _cam_detect
+    data = request.json or {}
+    _cam_detect = bool(data.get('on', True))
+    return jsonify({"status": "success", "on": _cam_detect,
+                    "message": ("Live + detection ON - the green dot marks the cross the "
+                                "detector sees (label shows FOUND / not found)"
+                                if _cam_detect else "Live + detection off")})
 
 
 @app.route('/vision/stop', methods=['POST'])
@@ -3469,18 +4072,37 @@ def vision_stop():
 
 @app.route('/vision/cameras', methods=['GET'])
 def vision_cameras():
-    """Probe indices 0..5 and report which open, so the user can find the arm cam."""
+    """
+    Probe indices 0..9 and report every camera that delivers a frame, with its
+    DirectShow NAME (via pygrabber) and resolution, so the operator can tell the arm
+    Logitech from the volume Logitech and the laptop cam. A camera that 'opens but
+    gives no frame' (the shared-hub bandwidth failure) is reported as frame:false.
+    Cameras must be released by any live view first, or they'll read as busy.
+    """
     try:
         import cv2
     except Exception:
         return jsonify({"status": "error", "message": "OpenCV (cv2) not available"}), 500
+    names = _camera_names()        # CAP_DSHOW index order; [] if pygrabber missing
+    # Only probe indices that ACTUALLY EXIST. pygrabber lists present DirectShow
+    # devices without opening a capture (so it can't block); we then DSHOW-open just
+    # those. Blindly sweeping 0..9 (esp. under MSMF) hangs on absent/flaky indices and
+    # wedged the server - that bug is fixed here. Fallback: bounded DSHOW scan 0..5.
+    indices = list(range(len(names))) if names else list(range(6))
+    devices = []
     found = []
-    for i in range(6):
-        cap = cv2.VideoCapture(i, cv2.CAP_DSHOW)
-        if cap.isOpened():
+    for i in indices:
+        cap = _open_capture(i)     # DSHOW + MJPG, frame-verified, bounded
+        if cap is not None:
+            w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
+            h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
+            cap.release()
+            devices.append({"index": i,
+                            "name": names[i] if i < len(names) else f"Camera {i}",
+                            "frame": True, "width": w, "height": h})
             found.append(i)
-        cap.release()
-    return jsonify({"status": "success", "cameras": found, "current": ARM_CAMERA_INDEX})
+    return jsonify({"status": "success", "cameras": found, "devices": devices,
+                    "names": names, "current": ARM_CAMERA_INDEX})
 
 
 @app.route('/vision/snapshot', methods=['POST'])

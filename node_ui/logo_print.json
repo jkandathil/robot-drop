@@ -1,0 +1,906 @@
+{
+  "locations": [
+    {
+      "name": "LogoPoint-1",
+      "type": "WELL",
+      "pos": [
+        1884,
+        1732,
+        1438,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-2",
+      "type": "WELL",
+      "pos": [
+        1911,
+        1727,
+        1365,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-3",
+      "type": "WELL",
+      "pos": [
+        1937,
+        1716,
+        1280,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-4",
+      "type": "WELL",
+      "pos": [
+        1947,
+        1700,
+        1218,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-5",
+      "type": "WELL",
+      "pos": [
+        1947,
+        1683,
+        1179,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-6",
+      "type": "WELL",
+      "pos": [
+        1946,
+        1663,
+        1147,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-7",
+      "type": "WELL",
+      "pos": [
+        1950,
+        1637,
+        1109,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-8",
+      "type": "WELL",
+      "pos": [
+        1952,
+        1607,
+        1078,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-9",
+      "type": "WELL",
+      "pos": [
+        1955,
+        1574,
+        1049,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-10",
+      "type": "WELL",
+      "pos": [
+        1960,
+        1537,
+        1023,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-11",
+      "type": "WELL",
+      "pos": [
+        1954,
+        1495,
+        1009,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-12",
+      "type": "WELL",
+      "pos": [
+        1920,
+        1466,
+        1021,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-13",
+      "type": "WELL",
+      "pos": [
+        1884,
+        1460,
+        1040,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-14",
+      "type": "WELL",
+      "pos": [
+        1834,
+        1481,
+        1071,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-15",
+      "type": "WELL",
+      "pos": [
+        1781,
+        1520,
+        1105,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-16",
+      "type": "WELL",
+      "pos": [
+        1723,
+        1573,
+        1142,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-17",
+      "type": "WELL",
+      "pos": [
+        1660,
+        1635,
+        1179,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-18",
+      "type": "WELL",
+      "pos": [
+        1598,
+        1700,
+        1213,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-19",
+      "type": "WELL",
+      "pos": [
+        1524,
+        1792,
+        1261,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-20",
+      "type": "WELL",
+      "pos": [
+        1470,
+        1872,
+        1314,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-21",
+      "type": "WELL",
+      "pos": [
+        1429,
+        1935,
+        1368,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-22",
+      "type": "WELL",
+      "pos": [
+        1378,
+        2005,
+        1427,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-23",
+      "type": "WELL",
+      "pos": [
+        1350,
+        2046,
+        1487,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-24",
+      "type": "WELL",
+      "pos": [
+        1344,
+        2060,
+        1546,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-25",
+      "type": "WELL",
+      "pos": [
+        1362,
+        2045,
+        1606,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-26",
+      "type": "WELL",
+      "pos": [
+        1411,
+        1997,
+        1651,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-27",
+      "type": "WELL",
+      "pos": [
+        1468,
+        1946,
+        1662,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-28",
+      "type": "WELL",
+      "pos": [
+        1525,
+        1899,
+        1663,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-29",
+      "type": "WELL",
+      "pos": [
+        1582,
+        1857,
+        1654,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-30",
+      "type": "WELL",
+      "pos": [
+        1636,
+        1822,
+        1647,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-31",
+      "type": "WELL",
+      "pos": [
+        1690,
+        1791,
+        1630,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-32",
+      "type": "WELL",
+      "pos": [
+        1742,
+        1767,
+        1616,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-33",
+      "type": "WELL",
+      "pos": [
+        1797,
+        1748,
+        1571,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-34",
+      "type": "WELL",
+      "pos": [
+        1854,
+        1737,
+        1490,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-35",
+      "type": "WELL",
+      "pos": [
+        1607,
+        1840,
+        1649,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-36",
+      "type": "WELL",
+      "pos": [
+        1514,
+        1906,
+        1535,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-37",
+      "type": "WELL",
+      "pos": [
+        1571,
+        1863,
+        1526,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-38",
+      "type": "WELL",
+      "pos": [
+        1624,
+        1829,
+        1518,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-39",
+      "type": "WELL",
+      "pos": [
+        1677,
+        1799,
+        1507,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-40",
+      "type": "WELL",
+      "pos": [
+        1730,
+        1773,
+        1487,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-41",
+      "type": "WELL",
+      "pos": [
+        1781,
+        1754,
+        1469,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-42",
+      "type": "WELL",
+      "pos": [
+        1836,
+        1735,
+        1397,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-43",
+      "type": "WELL",
+      "pos": [
+        1848,
+        1722,
+        1335,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-44",
+      "type": "WELL",
+      "pos": [
+        1849,
+        1707,
+        1287,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-45",
+      "type": "WELL",
+      "pos": [
+        1849,
+        1690,
+        1248,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-46",
+      "type": "WELL",
+      "pos": [
+        1851,
+        1667,
+        1207,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-47",
+      "type": "WELL",
+      "pos": [
+        1854,
+        1638,
+        1168,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-48",
+      "type": "WELL",
+      "pos": [
+        1855,
+        1607,
+        1137,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-49",
+      "type": "WELL",
+      "pos": [
+        1844,
+        1573,
+        1115,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-50",
+      "type": "WELL",
+      "pos": [
+        1812,
+        1573,
+        1126,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-51",
+      "type": "WELL",
+      "pos": [
+        1756,
+        1612,
+        1165,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-52",
+      "type": "WELL",
+      "pos": [
+        1698,
+        1665,
+        1210,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-53",
+      "type": "WELL",
+      "pos": [
+        1650,
+        1705,
+        1238,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-54",
+      "type": "WELL",
+      "pos": [
+        1573,
+        1788,
+        1297,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-55",
+      "type": "WELL",
+      "pos": [
+        1533,
+        1846,
+        1355,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-56",
+      "type": "WELL",
+      "pos": [
+        1484,
+        1908,
+        1420,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-57",
+      "type": "WELL",
+      "pos": [
+        1461,
+        1941,
+        1480,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-58",
+      "type": "WELL",
+      "pos": [
+        1487,
+        1927,
+        1529,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-59",
+      "type": "WELL",
+      "pos": [
+        1517,
+        1802,
+        1266,
+        3124
+      ]
+    },
+    {
+      "name": "LogoPoint-60",
+      "type": "WELL",
+      "pos": [
+        1590,
+        1850,
+        1522,
+        3124
+      ]
+    }
+  ],
+  "sequence": [
+    {
+      "action": "dispense",
+      "locIdx": 0,
+      "locName": "LogoPoint-1"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 1,
+      "locName": "LogoPoint-2"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 2,
+      "locName": "LogoPoint-3"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 3,
+      "locName": "LogoPoint-4"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 4,
+      "locName": "LogoPoint-5"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 5,
+      "locName": "LogoPoint-6"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 6,
+      "locName": "LogoPoint-7"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 7,
+      "locName": "LogoPoint-8"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 8,
+      "locName": "LogoPoint-9"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 9,
+      "locName": "LogoPoint-10"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 10,
+      "locName": "LogoPoint-11"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 11,
+      "locName": "LogoPoint-12"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 12,
+      "locName": "LogoPoint-13"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 13,
+      "locName": "LogoPoint-14"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 14,
+      "locName": "LogoPoint-15"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 15,
+      "locName": "LogoPoint-16"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 16,
+      "locName": "LogoPoint-17"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 17,
+      "locName": "LogoPoint-18"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 18,
+      "locName": "LogoPoint-19"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 19,
+      "locName": "LogoPoint-20"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 20,
+      "locName": "LogoPoint-21"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 21,
+      "locName": "LogoPoint-22"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 22,
+      "locName": "LogoPoint-23"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 23,
+      "locName": "LogoPoint-24"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 24,
+      "locName": "LogoPoint-25"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 25,
+      "locName": "LogoPoint-26"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 26,
+      "locName": "LogoPoint-27"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 27,
+      "locName": "LogoPoint-28"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 28,
+      "locName": "LogoPoint-29"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 29,
+      "locName": "LogoPoint-30"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 30,
+      "locName": "LogoPoint-31"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 31,
+      "locName": "LogoPoint-32"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 32,
+      "locName": "LogoPoint-33"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 33,
+      "locName": "LogoPoint-34"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 34,
+      "locName": "LogoPoint-35"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 35,
+      "locName": "LogoPoint-36"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 36,
+      "locName": "LogoPoint-37"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 37,
+      "locName": "LogoPoint-38"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 38,
+      "locName": "LogoPoint-39"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 39,
+      "locName": "LogoPoint-40"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 40,
+      "locName": "LogoPoint-41"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 41,
+      "locName": "LogoPoint-42"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 42,
+      "locName": "LogoPoint-43"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 43,
+      "locName": "LogoPoint-44"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 44,
+      "locName": "LogoPoint-45"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 45,
+      "locName": "LogoPoint-46"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 46,
+      "locName": "LogoPoint-47"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 47,
+      "locName": "LogoPoint-48"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 48,
+      "locName": "LogoPoint-49"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 49,
+      "locName": "LogoPoint-50"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 50,
+      "locName": "LogoPoint-51"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 51,
+      "locName": "LogoPoint-52"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 52,
+      "locName": "LogoPoint-53"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 53,
+      "locName": "LogoPoint-54"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 54,
+      "locName": "LogoPoint-55"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 55,
+      "locName": "LogoPoint-56"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 56,
+      "locName": "LogoPoint-57"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 57,
+      "locName": "LogoPoint-58"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 58,
+      "locName": "LogoPoint-59"
+    },
+    {
+      "action": "dispense",
+      "locIdx": 59,
+      "locName": "LogoPoint-60"
+    }
+  ]
+}

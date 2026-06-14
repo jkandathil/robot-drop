@@ -1,0 +1,40 @@
+{
+    "locations": [
+        {
+            "name": "Ink1",
+            "type": "INK",
+            "pos": [
+                1492,
+                3154,
+                996,
+                2730,
+                1699,
+                2208,
+                1462
+            ]
+        },
+        {
+            "name": "Well1",
+            "type": "WELL",
+            "pos": [
+                1095,
+                3288,
+                996,
+                3011,
+                1700,
+                2207,
+                1462
+            ]
+        }
+    ],
+    "sequence": [
+        {
+            "action": "aspirate",
+            "locIdx": 0
+        },
+        {
+            "action": "dispense",
+            "locIdx": 1
+        }
+    ]
+}

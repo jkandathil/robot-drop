@@ -1,0 +1,104 @@
+{
+    "locations": [
+        {
+            "name": "CNT-Ink1",
+            "type": "INK",
+            "pos": [
+                1493,
+                3159,
+                996,
+                2902,
+                1700,
+                2208,
+                1462
+            ]
+        },
+        {
+            "name": "Well1",
+            "type": "WELL",
+            "pos": [
+                1187,
+                3004,
+                995,
+                3030,
+                1700,
+                2208,
+                1462
+            ]
+        },
+        {
+            "name": "Grid 1-1",
+            "type": "GRID",
+            "pos": [
+                1187,
+                3004,
+                995,
+                3030
+            ]
+        },
+        {
+            "name": "Grid 1-2",
+            "type": "GRID",
+            "pos": [
+                1188,
+                3011,
+                995,
+                3030
+            ]
+        },
+        {
+            "name": "Grid 2-1",
+            "type": "GRID",
+            "pos": [
+                1195,
+                2993,
+                995,
+                3030
+            ]
+        },
+        {
+            "name": "Grid 2-2",
+            "type": "GRID",
+            "pos": [
+                1196,
+                3000,
+                995,
+                3030
+            ]
+        }
+    ],
+    "sequence": [
+        {
+            "action": "aspirate",
+            "locIdx": 0
+        },
+        {
+            "action": "dispense",
+            "locIdx": 2
+        },
+        {
+            "action": "aspirate",
+            "locIdx": 0
+        },
+        {
+            "action": "dispense",
+            "locIdx": 3
+        },
+        {
+            "action": "aspirate",
+            "locIdx": 0
+        },
+        {
+            "action": "dispense",
+            "locIdx": 4
+        },
+        {
+            "action": "aspirate",
+            "locIdx": 0
+        },
+        {
+            "action": "dispense",
+            "locIdx": 5
+        }
+    ]
+}

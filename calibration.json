@@ -1,0 +1,49 @@
+{
+  "substrate": {
+    "corners": {
+      "TL": [
+        882,
+        3104,
+        900,
+        2842
+      ],
+      "TR": [
+        953,
+        2816,
+        1117,
+        2842
+      ],
+      "BR": [
+        761,
+        2951,
+        1174,
+        2842
+      ],
+      "BL": [
+        670,
+        3235,
+        981,
+        2842
+      ]
+    },
+    "deposition_z": null,
+    "width_mm": 50.0,
+    "height_mm": 50.0
+  },
+  "reagent": {
+    "corners": {
+      "TL": null,
+      "TR": null,
+      "BR": null,
+      "BL": null
+    },
+    "deposition_z": null,
+    "width_mm": null,
+    "height_mm": null
+  },
+  "locations": {
+    "inks": [],
+    "wells": []
+  },
+  "maps": {}
+}

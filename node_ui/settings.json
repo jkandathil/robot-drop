@@ -1,0 +1,1 @@
+{"safe_z_limit": 3125, "thumb_limits": {"1": 3061, "3": 3056, "5": 3074}, "thumb_dispense_limits": {"1": 1699, "3": 1699, "5": 3123}, "arm_camera_index": 1, "arm_speed": 40, "area_travel_z": {"substrate": 2843, "reagent": 2621}, "grab_overrides": {"3": {"grab": [1100, 1528, 948], "z": 1598}}}
